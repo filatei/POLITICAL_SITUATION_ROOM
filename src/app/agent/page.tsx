@@ -2,16 +2,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuid } from "uuid";
-import { api, clearAuth, getToken } from "@/lib/session";
+import { api, clearAuth, getToken, getSessionLocal } from "@/lib/session";
 import { compressImage } from "@/lib/media";
 import { enqueue, count, onOutboxChange, drain, type OutboxMedia } from "@/lib/outbox";
 import { getSocket } from "@/lib/socket";
+import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import PartyBadge from "@/components/PartyBadge";
 
 type Instr = { receiptId: string; id: string; title?: string; body: string; severity: string; status: string; createdAt: string };
 type Cand = { id: string; name: string; party: string; partyName: string; color: string };
 type Unit = { id: string; name: string; label: string; registeredVoters: number } | null;
 type Mode = "update" | "scores" | "incident";
+type ToastT = { msg: string; type: "success" | "error" | "info" } | null;
+type Notify = (msg: string, type?: "success" | "error" | "info") => void;
 
 function useOnline() {
   const [online, setOnline] = useState(true);
@@ -43,8 +46,11 @@ export default function AgentHome() {
   const [cands, setCands] = useState<Cand[]>([]);
   const [unit, setUnit] = useState<Unit>(null);
   const [queued, setQueued] = useState(0);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<ToastT>(null);
   const [instructions, setInstructions] = useState<Instr[]>([]);
+  const [menu, setMenu] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const session = getSessionLocal();
 
   useEffect(() => {
     if (!getToken()) { router.replace("/agent/login"); return; }
@@ -60,7 +66,6 @@ export default function AgentHome() {
     return off;
   }, []); // eslint-disable-line
 
-  // Realtime: receive instructions from the situation room + presence heartbeat.
   useEffect(() => {
     if (!getToken()) return;
     api("/api/instructions").then(async (r) => { if (r.ok) setInstructions((await r.json()).instructions || []); });
@@ -68,14 +73,18 @@ export default function AgentHome() {
     const onInstr = (m: Instr) => {
       setInstructions((prev) => (prev.some((x) => x.receiptId === m.receiptId) ? prev : [{ ...m, status: "DELIVERED" }, ...prev]));
       sock.emit("instruction:ack", { receiptId: m.receiptId });
-      flash("New instruction from situation room");
+      notify("New instruction from situation room", "info");
     };
     sock.on("instruction", onInstr);
     const hb = setInterval(() => sock.emit("presence"), 25000);
     return () => { sock.off("instruction", onInstr); clearInterval(hb); };
   }, []); // eslint-disable-line
 
-  function flash(m: string) { setToast(m); setTimeout(() => setToast(""), 2500); }
+  function notify(msg: string, type: "success" | "error" | "info" = "success") {
+    setToast({ msg, type });
+    window.clearTimeout((notify as any)._t);
+    (notify as any)._t = window.setTimeout(() => setToast(null), 3200);
+  }
 
   function markRead(it: Instr) {
     getSocket().emit("instruction:read", { receiptId: it.receiptId });
@@ -90,84 +99,169 @@ export default function AgentHome() {
       const blob = f.file.type.startsWith("image/") ? await compressImage(f.file) : f.file;
       media.push({ blob, mime: blob.type || f.file.type, kind: f.kind, sheetSigned: f.sheetSigned });
     }
-    await enqueue({
-      clientUid: uuid(),
-      body: { ...body, ...geo, capturedAt: new Date().toISOString() },
-      media, createdAt: Date.now(), tries: 0,
-    });
-    flash(online ? "Sent" : "Queued — will send when online");
+    await enqueue({ clientUid: uuid(), body: { ...body, ...geo, capturedAt: new Date().toISOString() }, media, createdAt: Date.now(), tries: 0 });
+    notify(online ? "Sent to situation room" : "Saved — will sync when online", online ? "success" : "info");
   }
 
+  const initials = (session?.name || "A").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+
   return (
-    <main className="mx-auto max-w-md p-4 pb-24">
+    <main className="mx-auto max-w-md p-4 pb-28">
       <header className="mb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted">{election?.name || "Loading…"}</div>
-            <div className="font-semibold">{unit?.name || "—"}</div>
-            <div className="text-xs text-muted">{unit?.label}</div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-wide text-muted">{election?.name || "Loading…"}</div>
+            <div className="truncate text-lg font-bold">{unit?.name || "—"}</div>
+            <div className="truncate text-xs text-muted">{unit?.label}</div>
           </div>
-          <button className="text-xs text-muted underline" onClick={() => { clearAuth(); router.replace("/agent/login"); }}>Sign out</button>
+          <div className="relative">
+            <button onClick={() => setMenu((m) => !m)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent ring-1 ring-inset ring-accent/40" aria-label="Account">
+              {initials}
+            </button>
+            {menu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
+                <div className="fade-in absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl">
+                  <div className="border-b border-line px-4 py-3">
+                    <div className="truncate font-semibold">{session?.name || "Agent"}</div>
+                    <div className="truncate text-xs text-muted">{unit?.name}</div>
+                  </div>
+                  <button className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-ink/5" onClick={() => { setMenu(false); setSettings(true); }}>⚙️ Settings</button>
+                  <button className="flex w-full items-center gap-2 border-t border-line px-4 py-3 text-left text-sm text-bad hover:bg-bad/5" onClick={() => { clearAuth(); router.replace("/agent/login"); }}>⏻ Sign out</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <div className="mt-2 flex items-center gap-2 text-xs">
-          <span className={`pill ${online ? "bg-good/10 text-good" : "bg-warn/10 text-warn"}`}>{online ? "● Online" : "● Offline"}</span>
-          {queued > 0 && <span className="pill bg-panel text-ink">{queued} queued</span>}
-          {queued > 0 && online && <button className="text-accent underline" onClick={() => drain()}>Sync now</button>}
+        <div className="mt-3 flex items-center gap-2 text-xs">
+          <span className={`pill ${online ? "bg-good/10 text-good" : "bg-warn/10 text-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-good" : "bg-warn"}`} /> {online ? "Online" : "Offline"}</span>
+          {queued > 0 && <span className="pill bg-ink/5 text-ink">{queued} queued</span>}
+          {queued > 0 && <button className="font-semibold text-accent" onClick={async () => { await drain(); notify("Syncing…", "info"); }}>Sync now</button>}
         </div>
       </header>
 
       {instructions.filter((i) => i.status !== "READ").length > 0 && (
         <div className="mb-4 space-y-2">
           {instructions.filter((i) => i.status !== "READ").map((it) => (
-            <div key={it.receiptId} className={`card p-3 ${it.severity === "CRITICAL" || it.severity === "HIGH" ? "border-bad" : "border-accent"}`}>
+            <div key={it.receiptId} className={`card fade-in p-3 ${it.severity === "CRITICAL" || it.severity === "HIGH" ? "ring-1 ring-bad/50" : "ring-1 ring-accent/40"}`}>
               <div className="flex items-center justify-between">
-                <span className={`pill ${it.severity === "CRITICAL" || it.severity === "HIGH" ? "bg-bad/15 text-bad" : "bg-accent/10 text-accent"}`}>Instruction · {it.severity}</span>
-                <button className="text-xs text-accent underline" onClick={() => markRead(it)}>Mark read</button>
+                <span className={`pill ${it.severity === "CRITICAL" || it.severity === "HIGH" ? "bg-bad/15 text-bad" : "bg-accent/15 text-accent"}`}>Instruction · {it.severity}</span>
+                <button className="text-xs font-semibold text-accent" onClick={() => markRead(it)}>Mark read</button>
               </div>
-              {it.title && <div className="mt-1 font-medium">{it.title}</div>}
+              {it.title && <div className="mt-1 font-semibold">{it.title}</div>}
               <div className="mt-1 text-sm">{it.body}</div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-black/30 p-1 text-sm">
+      <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-ink/5 p-1 text-sm">
         {(["update", "scores", "incident"] as Mode[]).map((m) => (
           <button key={m} onClick={() => setMode(m)}
             className={`rounded-lg px-2 py-2 font-semibold capitalize transition ${mode === m ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted hover:text-ink"}`}>{m}</button>
         ))}
       </div>
 
-      {mode === "update" && <UpdateForm onSend={submit} />}
-      {mode === "scores" && <ScoresForm cands={cands} unit={unit} onSend={submit} />}
+      {mode === "update" && <UpdateForm onSend={submit} notify={notify} />}
+      {mode === "scores" && <ScoresForm cands={cands} unit={unit} onSend={submit} notify={notify} />}
       {mode === "incident" && <IncidentForm onSend={submit} />}
 
-      {toast && <div className="fixed inset-x-0 bottom-6 mx-auto w-fit rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/30">{toast}</div>}
+      {settings && <SettingsSheet onClose={() => setSettings(false)} notify={notify} />}
+
+      {toast && (
+        <div className={`toast-in fixed inset-x-0 bottom-6 z-40 mx-auto flex w-fit max-w-[92vw] items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold shadow-xl ${
+          toast.type === "error" ? "bg-bad text-white shadow-bad/30" : toast.type === "info" ? "border border-line bg-panel text-ink" : "bg-good text-white shadow-good/30"}`}>
+          <span>{toast.type === "error" ? "✕" : toast.type === "info" ? "•" : "✓"}</span>
+          {toast.msg}
+        </div>
+      )}
     </main>
   );
 }
 
+/* ---------------- Settings sheet: theme + change PIN ---------------- */
+function SettingsSheet({ onClose, notify }: { onClose: () => void; notify: Notify }) {
+  const [theme, setTh] = useState<Theme>("dark");
+  const [cur, setCur] = useState(""); const [n1, setN1] = useState(""); const [n2, setN2] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setTh(getTheme()); }, []);
+
+  function applyTheme(t: Theme) { setTh(t); setTheme(t); }
+
+  async function changePin() {
+    if (n1.length < 4) return notify("PIN must be at least 4 digits", "error");
+    if (n1 !== n2) return notify("PINs do not match", "error");
+    setBusy(true);
+    const r = await api("/api/agent/change-pin", { method: "POST", body: JSON.stringify({ currentPin: cur, newPin: n1 }) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { notify("PIN updated"); setCur(""); setN1(""); setN2(""); }
+    else notify(j.error || "Failed", "error");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={onClose}>
+      <div className="sheet-in card w-full max-w-md space-y-5 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">Settings</h2>
+          <button className="text-muted hover:text-ink" onClick={onClose}>✕</button>
+        </div>
+
+        <div>
+          <div className="label">Appearance</div>
+          <div className="grid grid-cols-2 gap-2">
+            {(["dark", "light"] as Theme[]).map((t) => (
+              <button key={t} onClick={() => applyTheme(t)}
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold capitalize transition ${theme === t ? "border-accent bg-accent/15 text-ink" : "border-line text-muted hover:text-ink"}`}>
+                {t === "dark" ? "🌙 Dark" : "☀️ Light"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2 border-t border-line pt-4">
+          <div className="label">Change PIN</div>
+          <input className="input" type="password" inputMode="numeric" placeholder="Current PIN" value={cur} onChange={(e) => setCur(e.target.value)} />
+          <input className="input" type="password" inputMode="numeric" placeholder="New PIN" value={n1} onChange={(e) => setN1(e.target.value)} />
+          <input className="input" type="password" inputMode="numeric" placeholder="Confirm new PIN" value={n2} onChange={(e) => setN2(e.target.value)} />
+          <button className="btn-primary w-full" disabled={busy} onClick={changePin}>Update PIN</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- Update (message + voice) ---------------- */
-function UpdateForm({ onSend }: { onSend: (b: any, f?: any[]) => Promise<void> }) {
+function UpdateForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promise<void>; notify: Notify }) {
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
   const [voiceUsed, setVoiceUsed] = useState(false);
   const recRef = useRef<any>(null);
+  const baseRef = useRef("");
 
   function toggleVoice() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("Voice-to-text not supported on this browser."); return; }
+    if (!SR) { notify("Voice-to-text isn't supported on this browser", "error"); return; }
     if (listening) { recRef.current?.stop(); return; }
     const rec = new SR();
-    rec.lang = "en-NG"; rec.continuous = true; rec.interimResults = true;
+    rec.lang = "en-NG";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    baseRef.current = text.trim();
+    // Rebuild the FULL transcript each event (interim + final) and append to the
+    // text that was present when dictation started — no duplicated fragments.
     rec.onresult = (e: any) => {
-      let s = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) s += e.results[i][0].transcript;
-      setText((prev) => (prev ? prev + " " : "") + s.trim());
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      const joined = (baseRef.current ? baseRef.current + " " : "") + t.trim();
+      setText(joined);
       setVoiceUsed(true);
     };
+    rec.onerror = () => setListening(false);
     rec.onend = () => setListening(false);
-    recRef.current = rec; rec.start(); setListening(true);
+    recRef.current = rec;
+    try { rec.start(); setListening(true); } catch { setListening(false); }
   }
 
   return (
@@ -175,21 +269,21 @@ function UpdateForm({ onSend }: { onSend: (b: any, f?: any[]) => Promise<void> }
       <label className="label">Message to the situation room</label>
       <textarea className="input min-h-28" value={text} onChange={(e) => setText(e.target.value)} placeholder="Type or dictate an update…" />
       <div className="flex gap-2">
-        <button className={`btn-ghost ${listening ? "border-bad text-bad" : ""}`} onClick={toggleVoice}>
-          {listening ? "● Stop dictation" : "🎙 Dictate"}
+        <button className={`btn-ghost ${listening ? "!border-bad !text-bad" : ""}`} onClick={toggleVoice}>
+          {listening ? <><span className="live-dot text-bad"><span className="block h-2 w-2 rounded-full bg-bad" /></span> Stop</> : "🎙 Dictate"}
         </button>
         <button className="btn-primary flex-1" disabled={!text.trim()}
           onClick={async () => { await onSend({ type: "MESSAGE", channel: voiceUsed ? "VOICE" : "TEXT", text }); setText(""); setVoiceUsed(false); }}>
           Send update
         </button>
       </div>
-      <p className="text-xs text-muted">Dictation is transcribed on your device and works offline for text.</p>
+      <p className="text-xs text-muted">Dictation is transcribed on your device. Speak clearly and pause between phrases for best accuracy.</p>
     </div>
   );
 }
 
 /* ---------------- Scores ---------------- */
-function ScoresForm({ cands, unit, onSend }: { cands: Cand[]; unit: Unit; onSend: (b: any, f?: any[]) => Promise<void> }) {
+function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit; onSend: (b: any, f?: any[]) => Promise<void>; notify: Notify }) {
   const [votes, setVotes] = useState<Record<string, string>>({});
   const [accredited, setAccredited] = useState("");
   const [cast, setCast] = useState("");
@@ -200,32 +294,31 @@ function ScoresForm({ cands, unit, onSend }: { cands: Cand[]; unit: Unit; onSend
 
   function speakNumbers() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { alert("Voice not supported."); return; }
-    const rec = new SR(); rec.lang = "en-NG"; rec.interimResults = false;
+    if (!SR) { notify("Voice isn't supported on this browser", "error"); return; }
+    const rec = new SR(); rec.lang = "en-NG"; rec.interimResults = false; rec.maxAlternatives = 1;
     rec.onresult = (e: any) => {
       const said = e.results[0][0].transcript.toUpperCase();
       const next = { ...votes };
+      let hits = 0;
       for (const c of cands) {
         const m = said.match(new RegExp(`${c.party}\\D+(\\d+)`));
-        if (m) next[c.id] = m[1];
+        if (m) { next[c.id] = m[1]; hits++; }
       }
       setVotes(next);
+      notify(hits ? `Captured ${hits} value${hits > 1 ? "s" : ""}` : "No party numbers detected", hits ? "success" : "error");
     };
+    rec.onerror = () => notify("Could not capture audio", "error");
     rec.start();
   }
 
   async function send() {
     const scores = cands.map((c) => ({ candidateId: c.id, votes: Number(votes[c.id] || 0) }));
     await onSend(
-      {
-        type: "SCORE", channel: "TEXT",
-        confidence, sheetSigned: signed,
+      { type: "SCORE", channel: "TEXT", confidence, sheetSigned: signed,
         accreditedVoters: accredited ? Number(accredited) : undefined,
         totalVotesCast: cast ? Number(cast) : undefined,
         rejectedBallots: rejected ? Number(rejected) : undefined,
-        scores,
-        text: `Scores (${confidence.toLowerCase()})`,
-      },
+        scores, text: `Scores (${confidence.toLowerCase()})` },
       sheet ? [{ file: sheet, kind: "RESULT_SHEET", sheetSigned: signed }] : []
     );
     setVotes({}); setAccredited(""); setCast(""); setRejected(""); setSheet(null);
@@ -235,7 +328,7 @@ function ScoresForm({ cands, unit, onSend }: { cands: Cand[]; unit: Unit; onSend
     <div className="card space-y-3 p-4">
       <div className="flex items-center justify-between">
         <label className="label mb-0">Votes per party</label>
-        <button className="text-xs text-accent underline" onClick={speakNumbers}>🎙 Speak numbers</button>
+        <button className="text-xs font-semibold text-accent" onClick={speakNumbers}>🎙 Speak numbers</button>
       </div>
       <div className="space-y-2">
         {cands.map((c) => (
@@ -278,10 +371,7 @@ function IncidentForm({ onSend }: { onSend: (b: any, f?: any[]) => Promise<void>
   const [file, setFile] = useState<File | null>(null);
 
   async function send() {
-    await onSend(
-      { type: "INCIDENT", channel: "TEXT", text, severity },
-      file ? [{ file, kind: "INCIDENT" }] : []
-    );
+    await onSend({ type: "INCIDENT", channel: "TEXT", text, severity }, file ? [{ file, kind: "INCIDENT" }] : []);
     setText(""); setFile(null); setSeverity("MEDIUM");
   }
 

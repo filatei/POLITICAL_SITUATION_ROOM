@@ -1,6 +1,6 @@
 // Minimal PWA service worker: app-shell cache + Background Sync trigger.
-const CACHE = "psr-shell-v1";
-const SHELL = ["/", "/agent/login", "/room", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "psr-shell-v2";
+const SHELL = ["/", "/agent", "/agent/login", "/room", "/admin", "/manifest.webmanifest", "/icon.svg", "/icon-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

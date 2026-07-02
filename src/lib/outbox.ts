@@ -41,7 +41,10 @@ export async function all(): Promise<OutboxItem[]> {
 
 let draining = false;
 export async function drain(): Promise<void> {
-  if (draining || typeof navigator !== "undefined" && !navigator.onLine) return;
+  // Only guard against concurrent drains. We do NOT check navigator.onLine —
+  // it's unreliable in PWAs; if we're actually offline the fetch just fails and
+  // the item stays queued (tries++). This makes "Sync now" always attempt.
+  if (draining) return;
   draining = true;
   try {
     const d = await getDb();

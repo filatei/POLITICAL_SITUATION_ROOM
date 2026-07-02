@@ -5,16 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#f4f4f6",     // primary text (light on dark)
-        muted: "#8b8b96",
-        line: "#26262e",
-        panel: "#131318",   // card surface
-        surface: "#0e0e12", // header / elevated bars
-        bg: "#08080b",      // page
-        accent: "#5b8cff",
-        good: "#22c55e",
-        bad: "#ef4444",
-        warn: "#f59e0b",
+        // Driven by CSS variables (globals.css) so the theme can flip dark↔light.
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        line: "rgb(var(--line) / <alpha-value>)",
+        panel: "rgb(var(--panel) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        good: "rgb(var(--good) / <alpha-value>)",
+        bad: "rgb(var(--bad) / <alpha-value>)",
+        warn: "rgb(var(--warn) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],

@@ -15,7 +15,7 @@ export type Session = {
 const secret = () =>
   new TextEncoder().encode(process.env.JWT_SECRET || "dev-insecure-secret");
 
-export async function signSession(s: Session, expires = "24h"): Promise<string> {
+export async function signSession(s: Session, expires = "30d"): Promise<string> {
   return new SignJWT({ ...s })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
