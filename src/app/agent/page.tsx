@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { v4 as uuid } from "uuid";
 import { api, clearAuth, getToken, getSessionLocal } from "@/lib/session";
 import { compressImage } from "@/lib/media";
-import { enqueue, count, onOutboxChange, drain, type OutboxMedia } from "@/lib/outbox";
+import { enqueue, count, all as outboxAll, onOutboxChange, drain, type OutboxMedia } from "@/lib/outbox";
 import { getSocket } from "@/lib/socket";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import PartyBadge from "@/components/PartyBadge";
@@ -25,6 +25,18 @@ function useOnline() {
     return () => { window.removeEventListener("online", set); window.removeEventListener("offline", set); };
   }, []);
   return online;
+}
+
+function voiceError(code: string): string {
+  switch (code) {
+    case "not-allowed":
+    case "service-not-allowed": return "Microphone is blocked. Allow mic access for this site in your browser settings, then retry.";
+    case "audio-capture": return "No microphone detected on this device.";
+    case "no-speech": return "Didn't catch that — try again and speak clearly.";
+    case "network": return "Voice needs internet. Type your update instead.";
+    case "aborted": return "Dictation stopped.";
+    default: return `Voice capture failed (${code}).`;
+  }
 }
 
 async function getGeo(): Promise<{ lat?: number; lng?: number }> {
@@ -50,7 +62,19 @@ export default function AgentHome() {
   const [instructions, setInstructions] = useState<Instr[]>([]);
   const [menu, setMenu] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncErr, setSyncErr] = useState("");
   const session = getSessionLocal();
+
+  async function syncNow() {
+    if (syncing) return;
+    setSyncing(true); setSyncErr("");
+    await drain();
+    const items = await outboxAll();
+    setSyncing(false);
+    if (items.length === 0) { notify("All updates synced", "success"); }
+    else { const e = items.find((i) => i.lastError)?.lastError || "unknown error"; setSyncErr(e); notify("Some updates could not send", "error"); }
+  }
 
   useEffect(() => {
     if (!getToken()) { router.replace("/agent/login"); return; }
@@ -133,11 +157,23 @@ export default function AgentHome() {
             )}
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-2 text-xs">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <span className={`pill ${online ? "bg-good/10 text-good" : "bg-warn/10 text-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-good" : "bg-warn"}`} /> {online ? "Online" : "Offline"}</span>
           {queued > 0 && <span className="pill bg-ink/5 text-ink">{queued} queued</span>}
-          {queued > 0 && <button className="font-semibold text-accent" onClick={async () => { await drain(); notify("Syncing…", "info"); }}>Sync now</button>}
+          {queued > 0 && (
+            <button className="inline-flex items-center gap-1.5 font-semibold text-accent disabled:opacity-60" disabled={syncing} onClick={syncNow}>
+              <svg className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 3v6h-6" />
+              </svg>
+              {syncing ? "Syncing…" : "Sync now"}
+            </button>
+          )}
         </div>
+        {syncErr && queued > 0 && (
+          <div className="mt-2 rounded-lg border border-bad/30 bg-bad/5 px-3 py-2 text-xs text-bad">
+            Couldn&apos;t send {queued} update{queued > 1 ? "s" : ""}: {syncErr}
+          </div>
+        )}
       </header>
 
       {instructions.filter((i) => i.status !== "READ").length > 0 && (
@@ -258,10 +294,14 @@ function UpdateForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promise
       setText(joined);
       setVoiceUsed(true);
     };
-    rec.onerror = () => setListening(false);
+    rec.onerror = (e: any) => {
+      setListening(false);
+      const c = e?.error || "error";
+      if (c !== "aborted" && c !== "no-speech") notify(voiceError(c), "error");
+    };
     rec.onend = () => setListening(false);
     recRef.current = rec;
-    try { rec.start(); setListening(true); } catch { setListening(false); }
+    try { rec.start(); setListening(true); } catch { setListening(false); notify("Could not start dictation", "error"); }
   }
 
   return (
@@ -277,7 +317,7 @@ function UpdateForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promise
           Send update
         </button>
       </div>
-      <p className="text-xs text-muted">Dictation is transcribed on your device. Speak clearly and pause between phrases for best accuracy.</p>
+      <p className="text-xs text-muted">Dictation uses your browser&apos;s voice service (needs internet + mic permission). Speak clearly; you can always type instead.</p>
     </div>
   );
 }
@@ -307,8 +347,8 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
       setVotes(next);
       notify(hits ? `Captured ${hits} value${hits > 1 ? "s" : ""}` : "No party numbers detected", hits ? "success" : "error");
     };
-    rec.onerror = () => notify("Could not capture audio", "error");
-    rec.start();
+    rec.onerror = (e: any) => notify(voiceError(e?.error || "error"), "error");
+    try { rec.start(); } catch { notify("Could not start voice capture", "error"); }
   }
 
   async function send() {
@@ -332,11 +372,13 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
       </div>
       <div className="space-y-2">
         {cands.map((c) => (
-          <div key={c.id} className="flex items-center gap-2">
-            <PartyBadge code={c.party} color={c.color} size={26} />
-            <span className="w-12 text-sm font-semibold">{c.party}</span>
-            <span className="flex-1 truncate text-sm text-muted">{c.name}</span>
-            <input className="input w-24 text-right" inputMode="numeric" value={votes[c.id] || ""}
+          <div key={c.id} className="flex items-center gap-2.5">
+            <PartyBadge code={c.party} color={c.color} size={30} />
+            <div className="min-w-0 flex-1 leading-tight">
+              <div className="text-sm font-bold">{c.party}</div>
+              <div className="truncate text-xs text-muted">{c.name}</div>
+            </div>
+            <input className="input w-24 text-right text-lg font-semibold" inputMode="numeric" value={votes[c.id] || ""}
               onChange={(e) => setVotes({ ...votes, [c.id]: e.target.value })} placeholder="0" />
           </div>
         ))}

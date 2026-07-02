@@ -128,14 +128,18 @@ export default function Dashboard({ session }: { session: Session }) {
           <div className="space-y-4">
             {board.map((l) => (
               <div key={l.party}>
-                <div className="mb-1.5 flex items-baseline justify-between">
-                  <span className="flex items-center gap-2">
-                    <PartyBadge code={l.party} color={l.color} size={28} />
-                    <span className="text-sm font-semibold">{l.party}</span>
-                    <span className="truncate text-sm text-muted">{l.name}</span>
-                    {l.party === leadingParty && l.verified > 0 && <span className="pill bg-good/15 text-good">Leading</span>}
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <PartyBadge code={l.party} color={l.color} size={30} />
+                    <span className="min-w-0 leading-tight">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold">{l.party}</span>
+                        {l.party === leadingParty && l.verified > 0 && <span className="pill bg-good/15 text-good">Leading</span>}
+                      </span>
+                      <span className="block truncate text-xs text-muted">{l.name}</span>
+                    </span>
                   </span>
-                  <span className="tabular text-2xl font-extrabold">{nf.format(l.verified)}</span>
+                  <span className="tabular shrink-0 text-2xl font-extrabold">{nf.format(l.verified)}</span>
                 </div>
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct(l.verified)}%`, background: l.color, boxShadow: `0 0 12px ${l.color}` }} />
