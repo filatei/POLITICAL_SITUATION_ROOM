@@ -5,14 +5,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0a0a0a",
-        muted: "#5b5b5b",
-        line: "#e6e6e6",
-        panel: "#f6f6f6",
-        accent: "#1f4fd8",
-        good: "#137a37",
-        bad: "#c02626",
-        warn: "#b26a00",
+        ink: "#f4f4f6",     // primary text (light on dark)
+        muted: "#8b8b96",
+        line: "#26262e",
+        panel: "#131318",   // card surface
+        surface: "#0e0e12", // header / elevated bars
+        bg: "#08080b",      // page
+        accent: "#5b8cff",
+        good: "#22c55e",
+        bad: "#ef4444",
+        warn: "#f59e0b",
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],

@@ -130,10 +130,10 @@ export default function AgentHome() {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-3 gap-1 rounded-lg bg-panel p-1 text-sm">
+      <div className="mb-4 grid grid-cols-3 gap-1 rounded-xl border border-line bg-black/30 p-1 text-sm">
         {(["update", "scores", "incident"] as Mode[]).map((m) => (
           <button key={m} onClick={() => setMode(m)}
-            className={`rounded-md px-2 py-2 font-medium capitalize ${mode === m ? "bg-white shadow-sm" : "text-muted"}`}>{m}</button>
+            className={`rounded-lg px-2 py-2 font-semibold capitalize transition ${mode === m ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted hover:text-ink"}`}>{m}</button>
         ))}
       </div>
 
@@ -141,7 +141,7 @@ export default function AgentHome() {
       {mode === "scores" && <ScoresForm cands={cands} unit={unit} onSend={submit} />}
       {mode === "incident" && <IncidentForm onSend={submit} />}
 
-      {toast && <div className="fixed inset-x-0 bottom-6 mx-auto w-fit rounded-full bg-ink px-4 py-2 text-sm text-white shadow-lg">{toast}</div>}
+      {toast && <div className="fixed inset-x-0 bottom-6 mx-auto w-fit rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/30">{toast}</div>}
     </main>
   );
 }

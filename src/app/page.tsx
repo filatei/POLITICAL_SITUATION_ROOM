@@ -8,12 +8,12 @@ export default function Home() {
         <p className="mt-2 text-muted">Real-time election monitoring. Field agents report from the ground; the situation room sees everything live.</p>
       </header>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/agent/login" className="card p-6 hover:bg-panel">
+        <Link href="/agent/login" className="card p-6 transition hover:bg-white/[0.04] hover:ring-1 hover:ring-accent/30">
           <div className="text-lg font-semibold">Field Agent</div>
           <p className="mt-1 text-sm text-muted">Send updates, scores, incidents and voice notes from your polling unit. Works offline.</p>
           <div className="mt-4 text-sm font-medium text-accent">Open agent app →</div>
         </Link>
-        <Link href="/room" className="card p-6 hover:bg-panel">
+        <Link href="/room" className="card p-6 transition hover:bg-white/[0.04] hover:ring-1 hover:ring-accent/30">
           <div className="text-lg font-semibold">Situation Room</div>
           <p className="mt-1 text-sm text-muted">Live wall, score tally, incidents, AI analysis and big-screen relay.</p>
           <div className="mt-4 text-sm font-medium text-accent">Open dashboard →</div>

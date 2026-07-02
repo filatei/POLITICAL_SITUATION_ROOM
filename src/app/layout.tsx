@@ -6,11 +6,11 @@ export const metadata: Metadata = {
   title: "Political Situation Room",
   description: "Real-time election monitoring and situation room",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Situation Room", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Situation Room", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#08080b",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

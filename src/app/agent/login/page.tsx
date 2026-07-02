@@ -58,7 +58,7 @@ export default function AgentLogin() {
         },
       });
       const el = document.getElementById("gbtn");
-      if (el) g.accounts.id.renderButton(el, { theme: "outline", size: "large", width: 300 });
+      if (el) g.accounts.id.renderButton(el, { theme: "filled_blue", size: "large", shape: "pill", width: 300 });
     };
     document.body.appendChild(s);
     return () => { s.remove(); };
@@ -71,10 +71,10 @@ export default function AgentLogin() {
         <p className="mt-1 text-sm text-muted">Sign in to report from your polling unit.</p>
       </div>
 
-      <div className="flex gap-1 rounded-lg bg-panel p-1 text-sm">
+      <div className="flex gap-1 rounded-xl border border-line bg-black/30 p-1 text-sm">
         {(["invite", "otp", "google"] as Tab[]).map((t) => (
           <button key={t} onClick={() => { setTab(t); setErr(""); }}
-            className={`flex-1 rounded-md px-3 py-2 font-medium ${tab === t ? "bg-white shadow-sm" : "text-muted"}`}>
+            className={`flex-1 rounded-lg px-3 py-2 font-semibold transition ${tab === t ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted hover:text-ink"}`}>
             {t === "invite" ? "Invite + PIN" : t === "otp" ? "Phone OTP" : "Google"}
           </button>
         ))}

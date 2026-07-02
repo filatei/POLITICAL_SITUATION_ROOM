@@ -97,43 +97,50 @@ export default function Dashboard({ session }: { session: Session }) {
 
   return (
     <div className={big ? "bigscreen min-h-dvh" : "min-h-dvh"}>
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-white/90 px-4 py-3 backdrop-blur">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-muted">Situation Room</div>
-          <div className="font-semibold">{election?.name || "—"}</div>
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface/80 px-5 py-3.5 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Situation Room · Live</div>
+            <div className="text-lg font-bold tracking-tight">{election?.name || "—"}</div>
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          {tally && <span className="pill bg-panel">Reporting {tally.reporting.verified}/{tally.reporting.total} PUs · {reportPct}%</span>}
-          <span className="pill bg-good/10 text-good">● {presence.count} agents online</span>
+        <div className="flex items-center gap-2.5 text-sm">
+          {tally && <span className="pill bg-white/5 text-ink">Reporting <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> PUs · {reportPct}%</span>}
+          <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count} online</span>
           <button className="btn-ghost" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
-          {!big && <button className="text-xs text-muted underline" onClick={() => { clearAuth(); location.reload(); }}>Sign out</button>}
+          {!big && <button className="text-xs text-muted hover:text-ink" onClick={() => { clearAuth(); location.reload(); }}>Sign out</button>}
         </div>
       </header>
 
       <main className={`grid gap-4 p-4 ${big ? "grid-cols-2" : "lg:grid-cols-3"}`}>
         {/* Tally */}
-        <section className="card p-4">
-          <h2 className="mb-3 text-sm font-semibold">Score tally</h2>
-          <div className="space-y-3">
-            {tally?.leaderboard.map((l) => (
+        <section className="card p-5">
+          <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted">Score tally</h2>
+          <div className="space-y-4">
+            {tally?.leaderboard.map((l, i) => (
               <div key={l.party}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2"><span className="pill text-white" style={{ background: l.color }}>{l.party}</span><span className="text-muted">{l.name}</span></span>
-                  <span className="font-semibold tabular-nums">{nf.format(l.verified)}</span>
+                <div className="mb-1.5 flex items-baseline justify-between">
+                  <span className="flex items-center gap-2">
+                    <span className="pill text-white shadow" style={{ background: l.color }}>{l.party}</span>
+                    <span className="truncate text-sm text-muted">{l.name}</span>
+                    {i === 0 && l.verified > 0 && <span className="pill bg-good/15 text-good">Leading</span>}
+                  </span>
+                  <span className="tabular text-xl font-bold">{nf.format(l.verified)}</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded bg-panel">
-                  <div className="h-full rounded" style={{ width: `${pct(l.verified)}%`, background: l.color }} />
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct(l.verified)}%`, background: l.color, boxShadow: `0 0 12px ${l.color}` }} />
                 </div>
-                <div className="mt-0.5 text-xs text-muted">declared {nf.format(l.declared)} · perceived {nf.format(l.perceived)}</div>
+                <div className="mt-1 text-[11px] text-muted">declared <span className="tabular text-ink/70">{nf.format(l.declared)}</span> · perceived <span className="tabular text-ink/70">{nf.format(l.perceived)}</span></div>
               </div>
             ))}
             {!tally?.leaderboard.length && <p className="text-sm text-muted">No scores yet.</p>}
           </div>
           {tally && (
-            <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3 text-center text-xs">
-              <div><div className="font-semibold tabular-nums">{nf.format(tally.turnout.accredited)}</div><div className="text-muted">Accredited</div></div>
-              <div><div className="font-semibold tabular-nums">{nf.format(tally.turnout.cast)}</div><div className="text-muted">Cast</div></div>
-              <div><div className="font-semibold tabular-nums">{nf.format(tally.turnout.rejected)}</div><div className="text-muted">Rejected</div></div>
+            <div className="mt-5 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
+              <div><div className="tabular text-lg font-bold">{nf.format(tally.turnout.accredited)}</div><div className="text-[11px] uppercase tracking-wide text-muted">Accredited</div></div>
+              <div><div className="tabular text-lg font-bold">{nf.format(tally.turnout.cast)}</div><div className="text-[11px] uppercase tracking-wide text-muted">Cast</div></div>
+              <div><div className="tabular text-lg font-bold text-bad">{nf.format(tally.turnout.rejected)}</div><div className="text-[11px] uppercase tracking-wide text-muted">Rejected</div></div>
             </div>
           )}
         </section>

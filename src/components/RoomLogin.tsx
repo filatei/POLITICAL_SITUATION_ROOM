@@ -35,7 +35,7 @@ export default function RoomLogin({ onDone }: { onDone: () => void }) {
           if (r.ok) { saveAuth(j.token, j.session); onDone(); } else setErr(j.error || "Google failed");
         },
       });
-      const el = document.getElementById("gbtn2"); if (el) g.accounts.id.renderButton(el, { theme: "outline", size: "large" });
+      const el = document.getElementById("gbtn2"); if (el) g.accounts.id.renderButton(el, { theme: "filled_blue", size: "large", shape: "pill" });
     };
     document.body.appendChild(s);
     return () => { s.remove(); };
@@ -43,9 +43,12 @@ export default function RoomLogin({ onDone }: { onDone: () => void }) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-5 p-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Situation Room</h1>
-        <p className="mt-1 text-sm text-muted">Staff sign-in.</p>
+      <div className="flex items-center gap-3">
+        <span className="live-dot text-accent"><span className="block h-3 w-3 rounded-full bg-accent" /></span>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Situation Room</h1>
+          <p className="mt-0.5 text-sm text-muted">Staff sign-in.</p>
+        </div>
       </div>
       {err && <div className="rounded-lg border border-bad/30 bg-bad/5 px-3 py-2 text-sm text-bad">{err}</div>}
       <div className="card space-y-3 p-5">
