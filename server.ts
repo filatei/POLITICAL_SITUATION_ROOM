@@ -1,6 +1,7 @@
 // Custom server: Next.js + Socket.IO on one port (single deploy).
 // Realtime tier for presence, targeted instructions, and delivery receipts.
 // Submissions still go over HTTP POST + offline outbox — never sockets.
+import "./src/lib/als"; // MUST be first: installs globalThis.AsyncLocalStorage before any next import
 import { createServer } from "http";
 import next from "next";
 import { Server as IOServer } from "socket.io";
