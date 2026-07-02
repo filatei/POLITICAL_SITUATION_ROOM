@@ -28,7 +28,7 @@ const ONDO_LGAS = [
 // Contesting parties. Candidate names are set for the two leading parties;
 // the rest are placeholders you can edit in the admin console.
 const PARTIES = [
-  { code: "APC", name: "All Progressives Congress", color: "#1f6feb", candidate: "Lucky Aiyedatiwa", mate: "Olayide Adelami" },
+  { code: "APC", name: "All Progressives Congress", color: "#1f6feb", candidate: "Olubunmi Tunji-Ojo", mate: null },
   { code: "PDP", name: "Peoples Democratic Party", color: "#137a37", candidate: "Agboola Ajayi", mate: null },
   { code: "LP", name: "Labour Party", color: "#b26a00", candidate: "LP candidate (set in admin)", mate: null },
   { code: "NNPP", name: "New Nigeria Peoples Party", color: "#7b2fbf", candidate: "NNPP candidate (set in admin)", mate: null },

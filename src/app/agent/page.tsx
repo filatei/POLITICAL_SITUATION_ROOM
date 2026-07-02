@@ -6,6 +6,7 @@ import { api, clearAuth, getToken } from "@/lib/session";
 import { compressImage } from "@/lib/media";
 import { enqueue, count, onOutboxChange, drain, type OutboxMedia } from "@/lib/outbox";
 import { getSocket } from "@/lib/socket";
+import PartyBadge from "@/components/PartyBadge";
 
 type Instr = { receiptId: string; id: string; title?: string; body: string; severity: string; status: string; createdAt: string };
 type Cand = { id: string; name: string; party: string; partyName: string; color: string };
@@ -239,8 +240,9 @@ function ScoresForm({ cands, unit, onSend }: { cands: Cand[]; unit: Unit; onSend
       <div className="space-y-2">
         {cands.map((c) => (
           <div key={c.id} className="flex items-center gap-2">
-            <span className="pill w-16 justify-center text-white" style={{ background: c.color }}>{c.party}</span>
-            <span className="flex-1 truncate text-sm">{c.name}</span>
+            <PartyBadge code={c.party} color={c.color} size={26} />
+            <span className="w-12 text-sm font-semibold">{c.party}</span>
+            <span className="flex-1 truncate text-sm text-muted">{c.name}</span>
             <input className="input w-24 text-right" inputMode="numeric" value={votes[c.id] || ""}
               onChange={(e) => setVotes({ ...votes, [c.id]: e.target.value })} placeholder="0" />
           </div>

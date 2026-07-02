@@ -4,6 +4,8 @@
 
 :root { color-scheme: dark; }
 
+/* Larger base type across the whole app (rem-based utilities scale with this). */
+html { font-size: 112.5%; } /* 18px base */
 html, body {
   background-color: #08080b;
   color: #f4f4f6;

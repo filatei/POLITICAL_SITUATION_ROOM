@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, clearAuth } from "@/lib/session";
 import { getSocket } from "@/lib/socket";
+import PartyBadge from "@/components/PartyBadge";
 import type { Session } from "@/lib/auth";
 
 type Score = { party: string; color: string; votes: number };
@@ -94,6 +95,12 @@ export default function Dashboard({ session }: { session: Session }) {
   const maxVote = useMemo(() => Math.max(1, ...(tally?.leaderboard.flatMap((l) => [l.verified, l.declared]) || [1])), [tally]);
   const pct = (n: number) => Math.round((n / maxVote) * 100);
   const reportPct = tally ? Math.round((tally.reporting.verified / Math.max(1, tally.reporting.total)) * 100) : 0;
+  // Parties listed alphabetically; the front-runner is flagged separately.
+  const board = useMemo(() => [...(tally?.leaderboard || [])].sort((a, b) => a.party.localeCompare(b.party)), [tally]);
+  const leadingParty = useMemo(
+    () => (tally?.leaderboard || []).reduce<{ party: string; verified: number } | null>((m, l) => (l.verified > (m?.verified ?? -1) ? l : m), null)?.party,
+    [tally]
+  );
 
   return (
     <div className={big ? "bigscreen min-h-dvh" : "min-h-dvh"}>
@@ -118,15 +125,16 @@ export default function Dashboard({ session }: { session: Session }) {
         <section className="card p-5">
           <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted">Score tally</h2>
           <div className="space-y-4">
-            {tally?.leaderboard.map((l, i) => (
+            {board.map((l) => (
               <div key={l.party}>
                 <div className="mb-1.5 flex items-baseline justify-between">
                   <span className="flex items-center gap-2">
-                    <span className="pill text-white shadow" style={{ background: l.color }}>{l.party}</span>
+                    <PartyBadge code={l.party} color={l.color} size={28} />
+                    <span className="text-sm font-semibold">{l.party}</span>
                     <span className="truncate text-sm text-muted">{l.name}</span>
-                    {i === 0 && l.verified > 0 && <span className="pill bg-good/15 text-good">Leading</span>}
+                    {l.party === leadingParty && l.verified > 0 && <span className="pill bg-good/15 text-good">Leading</span>}
                   </span>
-                  <span className="tabular text-xl font-bold">{nf.format(l.verified)}</span>
+                  <span className="tabular text-2xl font-extrabold">{nf.format(l.verified)}</span>
                 </div>
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                   <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct(l.verified)}%`, background: l.color, boxShadow: `0 0 12px ${l.color}` }} />
@@ -163,9 +171,13 @@ export default function Dashboard({ session }: { session: Session }) {
                 <div className="mt-1 text-sm">{it.text}</div>
                 {it.severity && <span className={`pill mt-1 ${sevColor[it.severity] || "bg-panel"}`}>{it.severity}</span>}
                 {!!it.scores?.length && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {it.scores.map((s, i) => <span key={i} className="pill text-white" style={{ background: s.color }}>{s.party} {nf.format(s.votes)}</span>)}
-                    {it.confidence && <span className="pill bg-panel">{it.confidence}</span>}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {[...it.scores].sort((a, b) => a.party.localeCompare(b.party)).map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-white/5 py-0.5 pl-0.5 pr-2 text-xs font-semibold">
+                        <PartyBadge code={s.party} color={s.color} size={18} /> {nf.format(s.votes)}
+                      </span>
+                    ))}
+                    {it.confidence && <span className="pill bg-white/5">{it.confidence}</span>}
                   </div>
                 )}
                 {!!it.media?.length && (
