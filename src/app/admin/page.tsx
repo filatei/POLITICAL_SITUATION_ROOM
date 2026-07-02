@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, logout } from "@/lib/session";
 import RoomLogin from "@/components/RoomLogin";
+import QrModal from "@/components/QrModal";
+import ThemeToggle from "@/components/ThemeToggle";
 import type { Session } from "@/lib/auth";
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
@@ -40,10 +42,6 @@ export default function AdminPage() {
   return <Console />;
 }
 
-function copy(text: string) {
-  navigator.clipboard?.writeText(text);
-}
-
 function Console() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [lgas, setLgas] = useState<Lga[]>([]);
@@ -56,6 +54,13 @@ function Console() {
   const [flash, setFlash] = useState("");
   const [bulkLga, setBulkLga] = useState("");
   const [bulkResult, setBulkResult] = useState<{ name: string; inviteCode: string; unitLabel: string }[] | null>(null);
+  const [qr, setQr] = useState<{ code: string; label?: string } | null>(null);
+
+  function copyText(text: string) {
+    navigator.clipboard?.writeText(text);
+    setFlash(`Copied: ${text}`);
+    setTimeout(() => setFlash(""), 2000);
+  }
 
   async function load() {
     const [u, a] = await Promise.all([api("/api/admin/units"), api("/api/admin/agents")]);
@@ -109,7 +114,10 @@ function Console() {
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin</div>
           <div className="text-lg font-bold tracking-tight">Agents & access codes</div>
         </div>
-        <a href="/room" className="btn-ghost">Dashboard</a>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <a href="/room" className="btn-ghost">Dashboard</a>
+        </div>
       </header>
 
       {flash && <div className="mx-5 mt-4 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm">{flash}</div>}
@@ -122,13 +130,18 @@ function Console() {
             <div><label className="label">Agent name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></div>
             <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
             <div>
-              <label className="label">Polling unit</label>
+              <label className="label">Polling unit {unitId && <span className="text-good">· selected</span>}</label>
               <input className="input mb-2" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search unit / ward / LGA…" />
-              <select className="input" size={6} value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
                 {filteredUnits.map((u) => (
-                  <option key={u.id} value={u.id}>{u.label}{u.agents ? ` (${u.agents} agent${u.agents > 1 ? "s" : ""})` : ""}</option>
+                  <button type="button" key={u.id} onClick={() => setUnitId(u.id)}
+                    className={`flex w-full items-center justify-between gap-2 border-b border-line/60 px-3 py-2 text-left text-sm last:border-0 ${unitId === u.id ? "bg-accent/15 font-semibold text-ink" : "text-muted hover:bg-ink/5"}`}>
+                    <span className="truncate">{u.label}</span>
+                    {u.agents ? <span className="pill shrink-0 bg-ink/10 text-muted">{u.agents}</span> : null}
+                  </button>
                 ))}
-              </select>
+                {!filteredUnits.length && <div className="px-3 py-3 text-sm text-muted">No matching units.</div>}
+              </div>
             </div>
             <button className="btn-primary w-full" disabled={busy || !name.trim() || !unitId} onClick={createAgent}>Generate access code</button>
           </div>
@@ -148,10 +161,11 @@ function Console() {
           {bulkResult && (
             <div className="mt-3 max-h-64 space-y-1 overflow-y-auto border-t border-line pt-3 text-xs">
               {bulkResult.map((r) => (
-                <div key={r.inviteCode} className="flex items-center justify-between gap-2">
+                <button key={r.inviteCode} className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-ink/5"
+                  onClick={() => setQr({ code: r.inviteCode, label: r.unitLabel })} title="Show QR / copy">
                   <span className="truncate text-muted">{r.unitLabel}</span>
-                  <button className="tabular font-semibold text-accent" onClick={() => copy(r.inviteCode)}>{r.inviteCode}</button>
-                </div>
+                  <span className="tabular shrink-0 font-semibold text-accent">{r.inviteCode}</span>
+                </button>
               ))}
             </div>
           )}
@@ -171,10 +185,10 @@ function Console() {
                     <div className="truncate font-semibold">{a.name}</div>
                     <div className="truncate text-xs text-muted">{a.unitLabel}</div>
                   </div>
-                  <span className={`pill ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.status === "SUSPENDED" ? "bg-bad/15 text-bad" : "bg-white/5 text-muted"}`}>{a.status}</span>
+                  <span className={`pill ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.status === "SUSPENDED" ? "bg-bad/15 text-bad" : "bg-ink/5 text-muted"}`}>{a.status}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between">
-                  <button className="tabular rounded-md bg-white/5 px-2 py-1 text-sm font-semibold text-accent" onClick={() => copy(a.inviteCode)} title="Copy code">{a.inviteCode}</button>
+                  <button className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent hover:bg-accent/15" onClick={() => setQr({ code: a.inviteCode, label: `${a.name} · ${a.unitLabel}` })} title="Show QR / copy">{a.inviteCode} ⧉</button>
                   <button className="text-xs text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
                 </div>
               </div>
@@ -183,6 +197,8 @@ function Console() {
           </div>
         </section>
       </main>
+
+      {qr && <QrModal code={qr.code} label={qr.label} onClose={() => setQr(null)} onCopy={copyText} />}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, logout } from "@/lib/session";
 import { getSocket } from "@/lib/socket";
 import PartyBadge from "@/components/PartyBadge";
+import ThemeToggle from "@/components/ThemeToggle";
 import type { Session } from "@/lib/auth";
 
 type Score = { party: string; color: string; votes: number };
@@ -115,6 +116,7 @@ export default function Dashboard({ session }: { session: Session }) {
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {tally && <span className="pill bg-white/5 text-ink">Rep. <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> · {reportPct}%</span>}
           <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count} online</span>
+          {!big && <ThemeToggle />}
           {!big && (session.role === "ADMIN" || session.role === "COORDINATOR") && <a href="/admin" className="btn-ghost px-3 py-1.5">Admin</a>}
           <button className="btn-ghost hidden px-3 py-1.5 sm:inline-flex" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
           {!big && <button className="text-xs text-muted hover:text-ink" onClick={async () => { await logout(); location.reload(); }}>Sign out</button>}

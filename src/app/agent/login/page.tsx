@@ -14,6 +14,12 @@ export default function AgentLogin() {
   // invite
   const [inviteCode, setInviteCode] = useState("");
   const [pin, setPin] = useState("");
+
+  // Prefill the invite code from a scanned QR link: /agent/login?code=OND-XXXXX
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("code");
+    if (c) { setInviteCode(c.trim().toUpperCase()); setTab("invite"); }
+  }, []);
   // otp
   const [phone, setPhone] = useState("");
   const [otpSent, setOtpSent] = useState(false);
