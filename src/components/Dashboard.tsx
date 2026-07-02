@@ -28,6 +28,17 @@ const typeColor: Record<string, string> = {
   INCIDENT: "bg-bad/10 text-bad", SCORE: "bg-accent/10 text-accent", MESSAGE: "bg-panel text-ink", STATUS: "bg-panel text-muted",
 };
 const fmt = (s?: string) => (s ? new Date(s).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
+// Bulk-created agents are named "Agent <unit>", which duplicates the unit label.
+// Drop the author when it's already contained in the unit label.
+function sourceLabel(author?: string, unitLabel?: string): string {
+  const a = (author || "").trim();
+  const l = (unitLabel || "").trim();
+  if (!a) return l;
+  if (!l || l === "—") return a;
+  const clean = a.replace(/^agent\s+/i, "").trim();
+  if (clean && l.toLowerCase().includes(clean.toLowerCase())) return l;
+  return `${a} · ${l}`;
+}
 const nf = new Intl.NumberFormat();
 
 export default function Dashboard({ session }: { session: Session }) {
@@ -203,7 +214,7 @@ export default function Dashboard({ session }: { session: Session }) {
                   </div>
                 )}
                 <div className="mt-2 flex items-center justify-between text-xs text-muted">
-                  <span>{it.author} · {it.unitLabel}</span>
+                  <span>{sourceLabel(it.author, it.unitLabel)}</span>
                   {it.type === "SCORE" && (
                     <span className="flex items-center gap-2">
                       <span className={`pill ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus}</span>

@@ -51,15 +51,23 @@ export async function drain(): Promise<void> {
     const items = (await d.getAll("outbox")) as OutboxItem[];
     for (const item of items) {
       try {
-        // 1) upload any media, collect urls
+        // 1) upload any media, collect urls. A permanent upload failure (e.g. a
+        // too-large or unsupported result-sheet photo → 4xx) must NOT block the
+        // whole submission forever: skip that attachment and still deliver the
+        // scores/text. Only transient failures (5xx/offline) retry.
         const media: any[] = [];
         for (const m of item.media) {
           const fd = new FormData();
           fd.append("file", m.blob, `f.${m.mime.split("/")[1] || "bin"}`);
           const up = await api("/api/upload", { method: "POST", body: fd });
-          if (!up.ok) throw new Error(`upload ${up.status}`);
-          const j = await up.json();
-          media.push({ url: j.url, mime: j.mime, size: j.size, kind: m.kind, sheetSigned: m.sheetSigned, durationSec: m.durationSec });
+          if (up.ok) {
+            const j = await up.json();
+            media.push({ url: j.url, mime: j.mime, size: j.size, kind: m.kind, sheetSigned: m.sheetSigned, durationSec: m.durationSec });
+          } else if (up.status >= 400 && up.status < 500 && up.status !== 401 && up.status !== 429) {
+            continue; // permanent — drop this attachment, keep going
+          } else {
+            throw new Error(`upload ${up.status}`); // transient — retry whole item
+          }
         }
         // 2) post the submission. clientUid lives at the ITEM level (not in
         // body) and the server requires it for idempotency — include it here.

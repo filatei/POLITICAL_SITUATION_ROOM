@@ -30,12 +30,35 @@ function useOnline() {
 function voiceError(code: string): string {
   switch (code) {
     case "not-allowed":
-    case "service-not-allowed": return "Microphone is blocked. Allow mic access for this site in your browser settings, then retry.";
-    case "audio-capture": return "No microphone detected on this device.";
+    case "service-not-allowed": return "Microphone is blocked. Tap the padlock in the address bar → Permissions → allow Microphone, then retry.";
+    case "audio-capture": return "Couldn't reach the microphone. Close other apps using the mic, allow mic access for this site, then retry.";
     case "no-speech": return "Didn't catch that — try again and speak clearly.";
     case "network": return "Voice needs internet. Type your update instead.";
     case "aborted": return "Dictation stopped.";
     default: return `Voice capture failed (${code}).`;
+  }
+}
+
+// Android Chrome (and PWAs) often throw `audio-capture`/`not-allowed` from
+// SpeechRecognition unless mic permission was first granted via getUserMedia.
+// Pre-flight the permission (and warm up the mic), returning a friendly error
+// string on failure or null on success.
+async function ensureMic(): Promise<string | null> {
+  try {
+    const md = navigator.mediaDevices;
+    if (!md?.getUserMedia) return null; // can't pre-flight; let SR try anyway
+    const stream = await md.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop()); // release immediately for SR
+    return null;
+  } catch (e: any) {
+    const n = e?.name || "";
+    if (n === "NotAllowedError" || n === "SecurityError")
+      return "Microphone is blocked. Tap the padlock in the address bar → Permissions → allow Microphone, then retry.";
+    if (n === "NotFoundError" || n === "OverconstrainedError")
+      return "No microphone found on this device.";
+    if (n === "NotReadableError")
+      return "The microphone is busy in another app. Close it and retry.";
+    return "Couldn't access the microphone. Check mic permissions and retry.";
   }
 }
 
@@ -252,10 +275,12 @@ function UpdateForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promise
   const recRef = useRef<any>(null);
   const baseRef = useRef("");
 
-  function toggleVoice() {
+  async function toggleVoice() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { notify("Voice-to-text isn't supported on this browser", "error"); return; }
     if (listening) { recRef.current?.stop(); return; }
+    const micErr = await ensureMic();
+    if (micErr) { notify(micErr, "error"); return; }
     const rec = new SR();
     rec.lang = "en-NG";
     rec.interimResults = true;
@@ -310,9 +335,11 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
   const [sheet, setSheet] = useState<File | null>(null);
   const totalVotes = cands.reduce((s, c) => s + (Number(votes[c.id]) || 0), 0);
 
-  function speakNumbers() {
+  async function speakNumbers() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { notify("Voice isn't supported on this browser", "error"); return; }
+    const micErr = await ensureMic();
+    if (micErr) { notify(micErr, "error"); return; }
     const rec = new SR(); rec.lang = "en-NG"; rec.interimResults = false; rec.maxAlternatives = 1;
     rec.onresult = (e: any) => {
       const said = e.results[0][0].transcript.toUpperCase();
