@@ -38,7 +38,7 @@ export default function QrModal({ code, label, onClose, onCopy }: {
           {png ? <img src={png} alt="QR code" width={220} height={220} /> : <div className="grid h-[220px] w-[220px] place-items-center text-black/40">…</div>}
         </div>
         <div className="tabular text-2xl font-extrabold tracking-wide">{code}</div>
-        <p className="text-xs text-muted">Agent scans this with their phone camera → the app opens with the code filled in. They set a PIN and they&apos;re in.</p>
+        <p className="text-xs text-muted">Agent scans this with their phone camera → the app opens with the code filled in and signs them straight in.</p>
         <div className="grid grid-cols-2 gap-2">
           <button className="btn-ghost" onClick={() => doCopy("code", code)}>{copied === "code" ? "Copied ✓" : "Copy code"}</button>
           <button className="btn-primary" onClick={() => doCopy("link", loginUrl)}>{copied === "link" ? "Copied ✓" : "Copy link"}</button>

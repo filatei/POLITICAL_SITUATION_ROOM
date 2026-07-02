@@ -178,13 +178,19 @@ export default function Dashboard({ session }: { session: Session }) {
                 <div className="mt-1 text-sm">{it.text}</div>
                 {it.severity && <span className={`pill mt-1 ${sevColor[it.severity] || "bg-panel"}`}>{it.severity}</span>}
                 {!!it.scores?.length && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {[...it.scores].sort((a, b) => a.party.localeCompare(b.party)).map((s, i) => (
-                      <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-white/5 py-0.5 pl-0.5 pr-2 text-xs font-semibold">
-                        <PartyBadge code={s.party} color={s.color} size={18} /> {nf.format(s.votes)}
-                      </span>
-                    ))}
-                    {it.confidence && <span className="pill bg-white/5">{it.confidence}</span>}
+                  <div className="mt-2">
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                      {[...it.scores].sort((a, b) => b.votes - a.votes || a.party.localeCompare(b.party)).map((s, i) => (
+                        <span key={i} className="flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] px-2 py-1.5">
+                          <PartyBadge code={s.party} color={s.color} size={22} />
+                          <span className="min-w-0 leading-tight">
+                            <span className="block text-xs font-bold">{s.party}</span>
+                            <span className="tabular block text-sm font-extrabold">{nf.format(s.votes)}</span>
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                    {it.confidence && <span className="pill mt-2 bg-white/5">{it.confidence}</span>}
                   </div>
                 )}
                 {!!it.media?.length && (

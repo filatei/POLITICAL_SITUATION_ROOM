@@ -16,8 +16,8 @@ export default function PartyBadge({ code, color, size = 24 }: { code: string; c
         width={size}
         height={size}
         alt={code}
-        className="shrink-0 rounded-full object-contain ring-1 ring-white/10"
-        style={{ background: "rgba(255,255,255,0.06)" }}
+        className="shrink-0 rounded-full object-contain ring-1 ring-black/10"
+        style={{ background: "#ffffff", padding: Math.max(1, Math.round(size * 0.08)) }}
       />
     );
   }

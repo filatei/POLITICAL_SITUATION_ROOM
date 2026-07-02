@@ -308,6 +308,7 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
   const [confidence, setConfidence] = useState<"DECLARED" | "PERCEIVED" | "ESTIMATE">("DECLARED");
   const [signed, setSigned] = useState(false);
   const [sheet, setSheet] = useState<File | null>(null);
+  const totalVotes = cands.reduce((s, c) => s + (Number(votes[c.id]) || 0), 0);
 
   function speakNumbers() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -377,7 +378,8 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
         <label className="label">Result sheet photo</label>
         <input className="input" type="file" accept="image/*" capture="environment" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
       </div>
-      <button className="btn-primary w-full" onClick={send}>Submit scores</button>
+      <button className="btn-primary w-full" disabled={totalVotes <= 0} onClick={send}>Submit scores</button>
+      {totalVotes <= 0 && <p className="text-center text-xs text-muted">Enter at least one party&apos;s votes to submit.</p>}
       {unit && <p className="text-xs text-muted">Registered voters at this unit: {unit.registeredVoters}</p>}
     </div>
   );
