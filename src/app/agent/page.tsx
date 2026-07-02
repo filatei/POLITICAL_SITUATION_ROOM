@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuid } from "uuid";
-import { api, clearAuth, getToken, getSessionLocal } from "@/lib/session";
+import { api, logout, getToken, getSessionLocal } from "@/lib/session";
 import { compressImage } from "@/lib/media";
 import { enqueue, count, all as outboxAll, onOutboxChange, drain, type OutboxMedia } from "@/lib/outbox";
 import { getSocket } from "@/lib/socket";
@@ -151,7 +151,7 @@ export default function AgentHome() {
                     <div className="truncate text-xs text-muted">{unit?.name}</div>
                   </div>
                   <button className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-ink/5" onClick={() => { setMenu(false); setSettings(true); }}>⚙️ Settings</button>
-                  <button className="flex w-full items-center gap-2 border-t border-line px-4 py-3 text-left text-sm text-bad hover:bg-bad/5" onClick={() => { clearAuth(); router.replace("/agent/login"); }}>⏻ Sign out</button>
+                  <button className="flex w-full items-center gap-2 border-t border-line px-4 py-3 text-left text-sm text-bad hover:bg-bad/5" onClick={async () => { await logout(); router.replace("/agent/login"); }}>⏻ Sign out</button>
                 </div>
               </>
             )}

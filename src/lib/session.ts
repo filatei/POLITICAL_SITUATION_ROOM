@@ -23,6 +23,13 @@ export function getUnit<T = any>(): T | null {
 }
 export function clearAuth() { [TKEY, SKEY, UKEY].forEach((k) => localStorage.removeItem(k)); }
 
+// Full sign-out: clear the httpOnly cookie on the server AND the local token.
+// (clearAuth alone leaves the cookie, so /api/auth/me still sees you.)
+export async function logout() {
+  try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
+  clearAuth();
+}
+
 export async function api(path: string, opts: RequestInit = {}) {
   const token = getToken();
   const headers = new Headers(opts.headers);

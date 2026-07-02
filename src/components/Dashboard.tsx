@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, clearAuth } from "@/lib/session";
+import { api, logout } from "@/lib/session";
 import { getSocket } from "@/lib/socket";
 import PartyBadge from "@/components/PartyBadge";
 import type { Session } from "@/lib/auth";
@@ -117,7 +117,7 @@ export default function Dashboard({ session }: { session: Session }) {
           <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count} online</span>
           {!big && (session.role === "ADMIN" || session.role === "COORDINATOR") && <a href="/admin" className="btn-ghost px-3 py-1.5">Admin</a>}
           <button className="btn-ghost hidden px-3 py-1.5 sm:inline-flex" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
-          {!big && <button className="text-xs text-muted hover:text-ink" onClick={() => { clearAuth(); location.reload(); }}>Sign out</button>}
+          {!big && <button className="text-xs text-muted hover:text-ink" onClick={async () => { await logout(); location.reload(); }}>Sign out</button>}
         </div>
       </header>
 

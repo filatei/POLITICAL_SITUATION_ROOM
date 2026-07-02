@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "@/lib/session";
+import { api, logout } from "@/lib/session";
 import RoomLogin from "@/components/RoomLogin";
 import type { Session } from "@/lib/auth";
 
@@ -30,7 +30,10 @@ export default function AdminPage() {
         <div>
           <div className="text-lg font-semibold">Admins only</div>
           <p className="mt-1 text-sm text-muted">Signed in as {session?.name} ({session?.role}). You need an ADMIN or COORDINATOR account.</p>
-          <a href="/room" className="mt-4 inline-block text-accent hover:underline">Go to dashboard →</a>
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button className="btn-primary" onClick={async () => { await logout(); setSession(null); setState("out"); }}>Sign out & switch account</button>
+            <a href="/room" className="btn-ghost">Dashboard</a>
+          </div>
         </div>
       </main>
     );
