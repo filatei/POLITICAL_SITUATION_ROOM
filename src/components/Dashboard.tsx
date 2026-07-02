@@ -115,6 +115,7 @@ export default function Dashboard({ session }: { session: Session }) {
         <div className="flex items-center gap-2.5 text-sm">
           {tally && <span className="pill bg-white/5 text-ink">Reporting <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> PUs · {reportPct}%</span>}
           <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count} online</span>
+          {!big && (session.role === "ADMIN" || session.role === "COORDINATOR") && <a href="/admin" className="btn-ghost">Admin</a>}
           <button className="btn-ghost" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
           {!big && <button className="text-xs text-muted hover:text-ink" onClick={() => { clearAuth(); location.reload(); }}>Sign out</button>}
         </div>

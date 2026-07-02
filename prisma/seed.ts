@@ -36,6 +36,7 @@ const PARTIES = [
   { code: "ZLP", name: "Zenith Labour Party", color: "#c2255c", candidate: "ZLP candidate (set in admin)", mate: null },
   { code: "APGA", name: "All Progressives Grand Alliance", color: "#2f9e44", candidate: "APGA candidate (set in admin)", mate: null },
   { code: "ADC", name: "African Democratic Congress", color: "#495057", candidate: "ADC candidate (set in admin)", mate: null },
+  { code: "NDC", name: "Nigeria Democratic Congress", color: "#ea580c", candidate: "NDC candidate (set in admin)", mate: null },
 ];
 
 async function main() {
