@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  // No `output: standalone` — we run our own compiled custom server (server.cjs).
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
   // Don't fail the production build on type errors (dev box). Type-check
