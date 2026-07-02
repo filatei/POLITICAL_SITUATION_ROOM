@@ -1,0 +1,297 @@
+// Political Situation Room — data model
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ElectionType {
+  PRESIDENTIAL
+  GOVERNORSHIP
+  SENATORIAL
+  HOUSE_OF_REPS
+  STATE_ASSEMBLY
+  LG_CHAIRMANSHIP
+}
+
+enum ElectionStatus {
+  SETUP
+  LIVE
+  CLOSED
+}
+
+enum Role {
+  ADMIN
+  COORDINATOR
+  ANALYST
+  AGENT
+}
+
+enum Scope {
+  NATIONAL
+  STATE
+  LGA
+  WARD
+  PU
+}
+
+enum SubmissionType {
+  MESSAGE
+  SCORE
+  INCIDENT
+  STATUS
+}
+
+enum Channel {
+  TEXT
+  VOICE
+}
+
+enum Confidence {
+  DECLARED
+  PERCEIVED
+  ESTIMATE
+}
+
+enum ScoreStatus {
+  PENDING
+  VERIFIED
+  DISPUTED
+}
+
+enum MediaKind {
+  RESULT_SHEET
+  INCIDENT
+  VOICE
+  OTHER
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AgentStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+model Election {
+  id        String         @id @default(cuid())
+  name      String
+  type      ElectionType
+  date      DateTime
+  status    ElectionStatus @default(SETUP)
+  createdAt DateTime       @default(now())
+
+  parties      Party[]
+  candidates   Candidate[]
+  agents       Agent[]
+  submissions  Submission[]
+}
+
+model Party {
+  id         String      @id @default(cuid())
+  electionId String
+  election   Election    @relation(fields: [electionId], references: [id])
+  code       String
+  name       String
+  color      String      @default("#444444")
+  logoUrl    String?
+  candidates Candidate[]
+
+  @@unique([electionId, code])
+}
+
+model Candidate {
+  id           String        @id @default(cuid())
+  electionId   String
+  election     Election      @relation(fields: [electionId], references: [id])
+  partyId      String
+  party        Party         @relation(fields: [partyId], references: [id])
+  name         String
+  runningMate  String?
+  constituency String?
+  scores       ScoreRecord[]
+
+  @@index([electionId])
+}
+
+model State {
+  id    String @id @default(cuid())
+  code  String @unique
+  name  String
+  lgas  Lga[]
+  units PollingUnit[]
+  agents Agent[]
+}
+
+model Lga {
+  id      String @id @default(cuid())
+  stateId String
+  state   State  @relation(fields: [stateId], references: [id])
+  code    String
+  name    String
+  wards   Ward[]
+  units   PollingUnit[]
+  agents  Agent[]
+
+  @@unique([stateId, code])
+}
+
+model Ward {
+  id     String @id @default(cuid())
+  lgaId  String
+  lga    Lga    @relation(fields: [lgaId], references: [id])
+  code   String
+  name   String
+  units  PollingUnit[]
+  agents Agent[]
+
+  @@unique([lgaId, code])
+}
+
+model PollingUnit {
+  id            String  @id @default(cuid())
+  wardId        String
+  ward          Ward    @relation(fields: [wardId], references: [id])
+  lgaId         String
+  lga           Lga     @relation(fields: [lgaId], references: [id])
+  stateId       String
+  state         State   @relation(fields: [stateId], references: [id])
+  code          String
+  name          String
+  registeredVoters Int  @default(0)
+  lat           Float?
+  lng           Float?
+  agents        Agent[]
+  submissions   Submission[]
+
+  @@unique([wardId, code])
+  @@index([lgaId])
+  @@index([stateId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  role         Role     @default(ANALYST)
+  passwordHash String?
+  googleSub    String?  @unique
+  createdAt    DateTime @default(now())
+  submissions  Submission[]
+}
+
+model Agent {
+  id            String      @id @default(cuid())
+  electionId    String
+  election      Election    @relation(fields: [electionId], references: [id])
+  name          String
+  phone         String?
+  role          Role        @default(AGENT)
+  scope         Scope       @default(PU)
+  pollingUnitId String?
+  pollingUnit   PollingUnit? @relation(fields: [pollingUnitId], references: [id])
+  wardId        String?
+  ward          Ward?       @relation(fields: [wardId], references: [id])
+  lgaId         String?
+  lga           Lga?        @relation(fields: [lgaId], references: [id])
+  stateId       String?
+  state         State?      @relation(fields: [stateId], references: [id])
+  inviteCode    String      @unique
+  inviteUsedAt  DateTime?
+  pinHash       String?
+  status        AgentStatus @default(INVITED)
+  createdAt     DateTime    @default(now())
+  submissions   Submission[]
+
+  @@index([electionId])
+}
+
+model Submission {
+  id            String         @id @default(cuid())
+  clientUid     String         @unique
+  electionId    String
+  election      Election       @relation(fields: [electionId], references: [id])
+  type          SubmissionType
+  channel       Channel        @default(TEXT)
+  text          String?
+  severity      Severity?
+
+  agentId       String?
+  agent         Agent?         @relation(fields: [agentId], references: [id])
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id])
+
+  pollingUnitId String?
+  pollingUnit   PollingUnit?   @relation(fields: [pollingUnitId], references: [id])
+
+  // result-sheet level stats (for SCORE submissions)
+  accreditedVoters Int?
+  totalVotesCast   Int?
+  rejectedBallots  Int?
+  confidence       Confidence?
+  sheetSigned      Boolean?
+  scoreStatus      ScoreStatus  @default(PENDING)
+
+  lat           Float?
+  lng           Float?
+  capturedAt    DateTime
+  receivedAt    DateTime       @default(now())
+
+  scores        ScoreRecord[]
+  media         Media[]
+
+  @@index([electionId, receivedAt])
+  @@index([type])
+}
+
+model ScoreRecord {
+  id           String      @id @default(cuid())
+  submissionId String
+  submission   Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  candidateId  String
+  candidate    Candidate   @relation(fields: [candidateId], references: [id])
+  votes        Int
+
+  @@index([candidateId])
+  @@index([submissionId])
+}
+
+model Media {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  url          String
+  thumbUrl     String?
+  mime         String
+  size         Int
+  kind         MediaKind  @default(OTHER)
+  sha256       String?
+  sheetSigned  Boolean?
+  durationSec  Int?
+  width        Int?
+  height       Int?
+  createdAt    DateTime   @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorType String
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  at        DateTime @default(now())
+
+  @@index([entity, entityId])
+}
