@@ -61,10 +61,18 @@ export async function drain(): Promise<void> {
           const j = await up.json();
           media.push({ url: j.url, mime: j.mime, size: j.size, kind: m.kind, sheetSigned: m.sheetSigned, durationSec: m.durationSec });
         }
-        // 2) post the submission
-        const res = await api("/api/submissions", { method: "POST", body: JSON.stringify({ ...item.body, media }) });
-        if (!res.ok && res.status !== 409) throw new Error(`submit ${res.status}`);
-        await d.delete("outbox", item.clientUid);
+        // 2) post the submission. clientUid lives at the ITEM level (not in
+        // body) and the server requires it for idempotency — include it here.
+        const res = await api("/api/submissions", { method: "POST", body: JSON.stringify({ clientUid: item.clientUid, ...item.body, media }) });
+        if (res.ok || res.status === 409) {
+          await d.delete("outbox", item.clientUid);          // sent (or duplicate)
+        } else if (res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 429) {
+          // Permanent client error (e.g. malformed 400/422): retrying will never
+          // succeed, so drop it instead of blocking the queue forever.
+          await d.delete("outbox", item.clientUid);
+        } else {
+          throw new Error(`submit ${res.status}`);            // transient (401/429/5xx/offline) → retry
+        }
       } catch (e: any) {
         item.tries += 1; item.lastError = String(e?.message || e);
         await d.put("outbox", item);

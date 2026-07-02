@@ -10,6 +10,13 @@ export default function QrModal({ code, label, onClose, onCopy }: {
 }) {
   const [png, setPng] = useState("");
   const [loginUrl, setLoginUrl] = useState("");
+  const [copied, setCopied] = useState<"" | "code" | "link">("");
+
+  function doCopy(kind: "code" | "link", text: string) {
+    onCopy(text);
+    setCopied(kind);
+    setTimeout(() => setCopied(""), 1600);
+  }
 
   useEffect(() => {
     const url = `${window.location.origin}/agent/login?code=${encodeURIComponent(code)}`;
@@ -33,8 +40,8 @@ export default function QrModal({ code, label, onClose, onCopy }: {
         <div className="tabular text-2xl font-extrabold tracking-wide">{code}</div>
         <p className="text-xs text-muted">Agent scans this with their phone camera → the app opens with the code filled in. They set a PIN and they&apos;re in.</p>
         <div className="grid grid-cols-2 gap-2">
-          <button className="btn-ghost" onClick={() => onCopy(code)}>Copy code</button>
-          <button className="btn-primary" onClick={() => onCopy(loginUrl)}>Copy link</button>
+          <button className="btn-ghost" onClick={() => doCopy("code", code)}>{copied === "code" ? "Copied ✓" : "Copy code"}</button>
+          <button className="btn-primary" onClick={() => doCopy("link", loginUrl)}>{copied === "link" ? "Copied ✓" : "Copy link"}</button>
         </div>
       </div>
     </div>

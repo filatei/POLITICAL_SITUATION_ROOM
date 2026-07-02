@@ -215,25 +215,11 @@ export default function AgentHome() {
   );
 }
 
-/* ---------------- Settings sheet: theme + change PIN ---------------- */
-function SettingsSheet({ onClose, notify }: { onClose: () => void; notify: Notify }) {
+/* ---------------- Settings sheet: theme ---------------- */
+function SettingsSheet({ onClose }: { onClose: () => void; notify: Notify }) {
   const [theme, setTh] = useState<Theme>("dark");
-  const [cur, setCur] = useState(""); const [n1, setN1] = useState(""); const [n2, setN2] = useState("");
-  const [busy, setBusy] = useState(false);
   useEffect(() => { setTh(getTheme()); }, []);
-
   function applyTheme(t: Theme) { setTh(t); setTheme(t); }
-
-  async function changePin() {
-    if (n1.length < 4) return notify("PIN must be at least 4 digits", "error");
-    if (n1 !== n2) return notify("PINs do not match", "error");
-    setBusy(true);
-    const r = await api("/api/agent/change-pin", { method: "POST", body: JSON.stringify({ currentPin: cur, newPin: n1 }) });
-    setBusy(false);
-    const j = await r.json();
-    if (r.ok) { notify("PIN updated"); setCur(""); setN1(""); setN2(""); }
-    else notify(j.error || "Failed", "error");
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={onClose}>
@@ -242,7 +228,6 @@ function SettingsSheet({ onClose, notify }: { onClose: () => void; notify: Notif
           <h2 className="text-lg font-bold">Settings</h2>
           <button className="text-muted hover:text-ink" onClick={onClose}>✕</button>
         </div>
-
         <div>
           <div className="label">Appearance</div>
           <div className="grid grid-cols-2 gap-2">
@@ -253,14 +238,6 @@ function SettingsSheet({ onClose, notify }: { onClose: () => void; notify: Notif
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="space-y-2 border-t border-line pt-4">
-          <div className="label">Change PIN</div>
-          <input className="input" type="password" inputMode="numeric" placeholder="Current PIN" value={cur} onChange={(e) => setCur(e.target.value)} />
-          <input className="input" type="password" inputMode="numeric" placeholder="New PIN" value={n1} onChange={(e) => setN1(e.target.value)} />
-          <input className="input" type="password" inputMode="numeric" placeholder="Confirm new PIN" value={n2} onChange={(e) => setN2(e.target.value)} />
-          <button className="btn-primary w-full" disabled={busy} onClick={changePin}>Update PIN</button>
         </div>
       </div>
     </div>

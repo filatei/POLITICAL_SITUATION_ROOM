@@ -13,7 +13,6 @@ export default function AgentLogin() {
 
   // invite
   const [inviteCode, setInviteCode] = useState("");
-  const [pin, setPin] = useState("");
 
   // Prefill the invite code from a scanned QR link: /agent/login?code=OND-XXXXX
   useEffect(() => {
@@ -37,7 +36,7 @@ export default function AgentLogin() {
   }
 
   async function doInvite() {
-    const j = await post("/api/auth/agent-invite", { inviteCode, pin });
+    const j = await post("/api/auth/agent-invite", { inviteCode });
     if (j) { saveAuth(j.token, j.session, j.unit); router.push("/agent"); }
   }
   async function reqOtp() { const j = await post("/api/auth/otp/request", { phone }); if (j) setOtpSent(true); }
@@ -92,13 +91,10 @@ export default function AgentLogin() {
         <div className="card space-y-3 p-5">
           <div>
             <label className="label">Invite code</label>
-            <input className="input uppercase" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="FIELD-1001" />
+            <input className="input uppercase" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} placeholder="FIELD-1001" autoFocus />
           </div>
-          <div>
-            <label className="label">PIN (set on first sign-in)</label>
-            <input className="input" value={pin} onChange={(e) => setPin(e.target.value)} inputMode="numeric" type="password" placeholder="••••" />
-          </div>
-          <button className="btn-primary w-full" disabled={busy} onClick={doInvite}>Sign in</button>
+          <button className="btn-primary w-full" disabled={busy || !inviteCode.trim()} onClick={doInvite}>Sign in</button>
+          <p className="text-center text-xs text-muted">Just enter your code — no password needed.</p>
         </div>
       )}
 
