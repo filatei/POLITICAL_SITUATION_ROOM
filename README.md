@@ -54,8 +54,18 @@ docker run -d --name psr-pg -e POSTGRES_USER=psr -e POSTGRES_PASSWORD=psr -e POS
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run db:push` / `db:seed` / `prisma:generate`
 
+## Realtime (two-way)
+Runs on a **custom server** (`server.ts`) hosting Next.js + **Socket.IO** on one
+port. The dashboard gets live submissions, **agent presence**, and can
+**broadcast instructions** to agents; agents receive instructions live and send
+**delivery/read receipts**. Instructions are DB-backed (`Instruction` +
+`InstructionReceipt`) so they deliver on reconnect even if an agent was offline.
+Submissions still go over HTTP POST + the offline outbox — never the socket.
+`npm run dev` / `npm start` both run `server.ts` (via tsx). SSE (`/api/stream`)
+remains available as a fallback.
+
 ## Notes
-- Realtime uses SSE (`/api/stream`); the dashboard auto-reconnects.
+- Realtime uses Socket.IO (`/socket.io`); the client auto-reconnects.
 - Media is stored under `public/uploads` (set `UPLOAD_DIR`). For production use
   object storage or a mounted volume.
 - Single-instance in-process pub/sub + OTP store; use Redis if you scale out.

@@ -194,3 +194,56 @@ Tailwind · SSE (in-proc pub/sub) · jose (JWT) · bcryptjs · zod ·
 @anthropic-ai/sdk · manual service worker + IndexedDB outbox (PWA). Deploy as a
 standalone Node container behind Caddy/Cloudflare (same pattern as your other
 apps) — **not** on the overloaded Otuburu box.
+
+---
+
+## 12. Realtime v2 — two-way socket tier (Socket.IO)
+
+The situation room needs bidirectional realtime during the count: **push
+instructions to specific agents**, see **who is online (presence)**, and get
+**per-agent delivery receipts**. This adds a Socket.IO tier alongside the app.
+
+**Invariant (unchanged):** result/incident **submissions always go over the
+offline POST + outbox** — never over a socket. Field agents on bad networks
+cannot depend on a live connection to file data. Sockets are an *enhancement*
+for presence, instructions, and receipts, and for low-latency dashboard push.
+
+### Transport
+Socket.IO (not raw ws): auto-reconnect, WebSocket with HTTP long-poll fallback
+(survives flaky 3G and Cloudflare), rooms, and **ack callbacks** (which give us
+delivery receipts for free). A single custom Node server (`server.ts`) hosts
+both Next.js and Socket.IO on one port → one deploy. Optional Redis adapter
+(env flag) for multi-instance later.
+
+### Rooms
+- `dashboard` — all situation-room screens.
+- `agent:<agentId>` — one room per agent (targeted instructions + receipts).
+- `election:<id>` — broadcast to all agents.
+Handshake authenticates with the same JWT (cookie or `auth.token`); the socket
+joins rooms by role/identity.
+
+### Events
+- Server→dashboard: `live` (submission/score/verify — bridged from the existing
+  in-process event bus, so current POST routes need no change) and
+  `presence:update`.
+- Server→agent: `instruction` (with an ack callback → receipt).
+- Agent→server: `presence` heartbeat, `instruction:ack` / `instruction:read`.
+  (Submissions still POST.)
+
+### Durable instructions (survive offline)
+Instructions are **persisted first**, then delivered — never fire-and-forget:
+- `Instruction` row + one `InstructionReceipt` per targeted agent (status
+  `SENT → DELIVERED → ACK → READ`).
+- If the agent socket is online: emit with ack → mark `DELIVERED`; agent tap →
+  `READ`.
+- If offline: the receipt stays `SENT`; on reconnect the server flushes all
+  undelivered receipts, and the agent app also `GET`s `/api/instructions` on
+  load to catch anything missed. (SMS/push fallback is a later add for
+  CRITICAL instructions.)
+Every receipt transition is mirrored to the dashboard so staff watch delivery
+in real time.
+
+### Presence
+Connect/disconnect maintains an in-process online set (Redis later);
+`Agent.lastSeenAt` is persisted. Dashboard shows online count + per-unit online
+status so the room knows which units currently have a live agent.

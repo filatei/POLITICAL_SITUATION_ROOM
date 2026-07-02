@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, clearAuth } from "@/lib/session";
+import { getSocket } from "@/lib/socket";
 import type { Session } from "@/lib/auth";
 
 type Score = { party: string; color: string; votes: number };
@@ -37,31 +38,44 @@ export default function Dashboard({ session }: { session: Session }) {
   const [q, setQ] = useState(""); const [answer, setAnswer] = useState(""); const [asking, setAsking] = useState(false);
   const canVerify = ["ADMIN", "COORDINATOR", "ANALYST"].includes(session.role);
   const tallyTimer = useRef<any>(null);
+  const [presence, setPresence] = useState<{ count: number; online: { agentId: string; name: string }[] }>({ count: 0, online: [] });
+  const [instrBody, setInstrBody] = useState(""); const [instrSev, setInstrSev] = useState("INFO"); const [sending, setSending] = useState(false);
+  const [instrLog, setInstrLog] = useState<any[]>([]);
 
   async function loadTally() { const r = await api("/api/tally"); if (r.ok) setTally(await r.json()); }
   async function loadFeed() { const r = await api("/api/submissions?limit=100"); if (r.ok) setFeed((await r.json()).submissions); }
   async function loadSummary() { const r = await api("/api/ai/summary"); if (r.ok) setSummary((await r.json()).summary); }
+  async function loadInstr() { const r = await api("/api/instructions"); if (r.ok) setInstrLog((await r.json()).instructions || []); }
+  async function loadPresence() { const r = await api("/api/presence"); if (r.ok) setPresence(await r.json()); }
   function scheduleTally() { clearTimeout(tallyTimer.current); tallyTimer.current = setTimeout(loadTally, 800); }
 
   useEffect(() => {
     api("/api/bootstrap").then(async (r) => r.ok && setElection((await r.json()).election));
-    loadFeed(); loadTally(); loadSummary();
+    loadFeed(); loadTally(); loadSummary(); loadInstr(); loadPresence();
 
-    const es = new EventSource("/api/stream");
-    es.onmessage = (e) => {
-      try {
-        const ev = JSON.parse(e.data);
-        if (ev.kind === "submission") { setFeed((f) => [ev.payload as Item, ...f].slice(0, 200)); if ((ev.payload as Item).type === "SCORE") scheduleTally(); }
-        else if (ev.kind === "verify") {
-          setFeed((f) => f.map((x) => (x.id === ev.payload.id ? { ...x, scoreStatus: ev.payload.status } : x)));
-          scheduleTally();
-        }
-      } catch {}
+    // Live over Socket.IO (bridged from the server event bus).
+    const sock = getSocket();
+    const onLive = (ev: any) => {
+      if (ev.kind === "submission") { setFeed((f) => [ev.payload as Item, ...f].slice(0, 200)); if ((ev.payload as Item).type === "SCORE") scheduleTally(); }
+      else if (ev.kind === "verify") { setFeed((f) => f.map((x) => (x.id === ev.payload.id ? { ...x, scoreStatus: ev.payload.status } : x))); scheduleTally(); }
     };
+    sock.on("live", onLive);
+    sock.on("presence:update", (p: any) => setPresence(p));
+    sock.on("receipt:update", () => loadInstr());
+    sock.on("instruction:new", () => loadInstr());
+
     const poll = setInterval(() => { loadTally(); }, 20000);
     const aiPoll = setInterval(loadSummary, 60000);
-    return () => { es.close(); clearInterval(poll); clearInterval(aiPoll); };
+    return () => { sock.off("live", onLive); sock.off("presence:update"); sock.off("receipt:update"); sock.off("instruction:new"); clearInterval(poll); clearInterval(aiPoll); };
   }, []); // eslint-disable-line
+
+  async function sendInstruction() {
+    if (!instrBody.trim()) return;
+    setSending(true);
+    const r = await api("/api/instructions", { method: "POST", body: JSON.stringify({ target: "ALL", body: instrBody, severity: instrSev }) });
+    setSending(false);
+    if (r.ok) { setInstrBody(""); loadInstr(); }
+  }
 
   async function verify(id: string, status: string) {
     const r = await api(`/api/submissions/${id}/verify`, { method: "POST", body: JSON.stringify({ status }) });
@@ -90,6 +104,7 @@ export default function Dashboard({ session }: { session: Session }) {
         </div>
         <div className="flex items-center gap-3 text-sm">
           {tally && <span className="pill bg-panel">Reporting {tally.reporting.verified}/{tally.reporting.total} PUs · {reportPct}%</span>}
+          <span className="pill bg-good/10 text-good">● {presence.count} agents online</span>
           <button className="btn-ghost" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
           {!big && <button className="text-xs text-muted underline" onClick={() => { clearAuth(); location.reload(); }}>Sign out</button>}
         </div>
@@ -171,8 +186,35 @@ export default function Dashboard({ session }: { session: Session }) {
           </div>
         </section>
 
-        {/* AI + incidents */}
+        {/* Instructions + presence + AI + incidents */}
         <section className="space-y-4">
+          {canVerify && (
+            <div className="card p-4">
+              <h2 className="mb-2 text-sm font-semibold">Send instruction to agents</h2>
+              <textarea className="input min-h-16" value={instrBody} onChange={(e) => setInstrBody(e.target.value)} placeholder="Instruction broadcast to all agents…" />
+              <div className="mt-2 flex items-center gap-2">
+                <select className="input w-auto py-1 text-xs" value={instrSev} onChange={(e) => setInstrSev(e.target.value)}>
+                  <option>INFO</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option>
+                </select>
+                <button className="btn-primary flex-1" disabled={sending || !instrBody.trim()} onClick={sendInstruction}>{sending ? "Sending…" : "Broadcast"}</button>
+              </div>
+              <div className="mt-3 max-h-40 space-y-1 overflow-y-auto border-t border-line pt-2 text-xs">
+                {instrLog.map((i) => (
+                  <div key={i.id} className="flex items-center justify-between">
+                    <span className="truncate pr-2">{i.body}</span>
+                    <span className="shrink-0 text-muted">{i.read}/{i.delivered}/{i.total} read/deliv/sent</span>
+                  </div>
+                ))}
+                {!instrLog.length && <p className="text-muted">No instructions sent.</p>}
+              </div>
+              {presence.online?.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1 border-t border-line pt-2">
+                  {presence.online.map((a) => <span key={a.agentId} className="pill bg-good/10 text-good">● {a.name}</span>)}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="card p-4">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold">AI analysis</h2>

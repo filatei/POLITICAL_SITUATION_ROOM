@@ -1,0 +1,47 @@
+name: psr
+
+# Political Situation Room — app + Postgres. Fronted by the host Caddy at
+# situationroom.torama.money (Cloudflare-proxied). App is the Next.js custom
+# server (Next + Socket.IO) on 127.0.0.1:3200.
+services:
+  psr-postgres:
+    image: postgres:16-alpine
+    container_name: psr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: psr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-psr}
+      POSTGRES_DB: psr
+    volumes:
+      - ./data/pg:/var/lib/postgresql/data
+    networks: [psr_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psr"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  psr-app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-763064592541-afo8b3po66bmo04q9ecselk9prske4l0.apps.googleusercontent.com}
+    image: psr-app:latest
+    container_name: psr-app
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: "3200"
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./data/uploads:/app/public/uploads
+    depends_on:
+      psr-postgres:
+        condition: service_healthy
+    networks: [psr_net]
+
+networks:
+  psr_net:
+    name: psr_net

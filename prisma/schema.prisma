@@ -95,6 +95,7 @@ model Election {
   candidates   Candidate[]
   agents       Agent[]
   submissions  Submission[]
+  instructions Instruction[]
 }
 
 model Party {
@@ -188,6 +189,7 @@ model User {
   googleSub    String?  @unique
   createdAt    DateTime @default(now())
   submissions  Submission[]
+  instructions Instruction[]
 }
 
 model Agent {
@@ -210,8 +212,10 @@ model Agent {
   inviteUsedAt  DateTime?
   pinHash       String?
   status        AgentStatus @default(INVITED)
+  lastSeenAt    DateTime?
   createdAt     DateTime    @default(now())
   submissions   Submission[]
+  receipts      InstructionReceipt[]
 
   @@index([electionId])
 }
@@ -294,4 +298,51 @@ model AuditLog {
   at        DateTime @default(now())
 
   @@index([entity, entityId])
+}
+
+enum InstructionStatus {
+  SENT
+  DELIVERED
+  ACK
+  READ
+}
+
+enum InstructionTarget {
+  AGENT
+  UNIT
+  WARD
+  LGA
+  ALL
+}
+
+model Instruction {
+  id         String            @id @default(cuid())
+  electionId String
+  election   Election          @relation(fields: [electionId], references: [id])
+  fromUserId String?
+  fromUser   User?             @relation(fields: [fromUserId], references: [id])
+  target     InstructionTarget @default(AGENT)
+  targetId   String?           // agentId / unitId / wardId / lgaId (null for ALL)
+  title      String?
+  body       String
+  severity   Severity          @default(INFO)
+  createdAt  DateTime          @default(now())
+  receipts   InstructionReceipt[]
+
+  @@index([electionId, createdAt])
+}
+
+model InstructionReceipt {
+  id            String            @id @default(cuid())
+  instructionId String
+  instruction   Instruction       @relation(fields: [instructionId], references: [id], onDelete: Cascade)
+  agentId       String
+  agent         Agent             @relation(fields: [agentId], references: [id])
+  status        InstructionStatus @default(SENT)
+  deliveredAt   DateTime?
+  ackedAt       DateTime?
+  readAt        DateTime?
+
+  @@unique([instructionId, agentId])
+  @@index([agentId, status])
 }

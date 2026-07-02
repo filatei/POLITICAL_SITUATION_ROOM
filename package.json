@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3200",
+    "dev": "tsx watch server.ts",
     "build": "prisma generate && next build",
-    "start": "next start -p 3200",
+    "start": "NODE_ENV=production tsx server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "db:push": "prisma db push",
@@ -23,6 +23,8 @@
     "next": "14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "uuid": "^11.0.3",
     "zod": "^3.23.8"
   },

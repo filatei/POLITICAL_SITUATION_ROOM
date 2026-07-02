@@ -5,7 +5,9 @@ import { v4 as uuid } from "uuid";
 import { api, clearAuth, getToken } from "@/lib/session";
 import { compressImage } from "@/lib/media";
 import { enqueue, count, onOutboxChange, drain, type OutboxMedia } from "@/lib/outbox";
+import { getSocket } from "@/lib/socket";
 
+type Instr = { receiptId: string; id: string; title?: string; body: string; severity: string; status: string; createdAt: string };
 type Cand = { id: string; name: string; party: string; partyName: string; color: string };
 type Unit = { id: string; name: string; label: string; registeredVoters: number } | null;
 type Mode = "update" | "scores" | "incident";
@@ -41,6 +43,7 @@ export default function AgentHome() {
   const [unit, setUnit] = useState<Unit>(null);
   const [queued, setQueued] = useState(0);
   const [toast, setToast] = useState("");
+  const [instructions, setInstructions] = useState<Instr[]>([]);
 
   useEffect(() => {
     if (!getToken()) { router.replace("/agent/login"); return; }
@@ -56,7 +59,28 @@ export default function AgentHome() {
     return off;
   }, []); // eslint-disable-line
 
+  // Realtime: receive instructions from the situation room + presence heartbeat.
+  useEffect(() => {
+    if (!getToken()) return;
+    api("/api/instructions").then(async (r) => { if (r.ok) setInstructions((await r.json()).instructions || []); });
+    const sock = getSocket();
+    const onInstr = (m: Instr) => {
+      setInstructions((prev) => (prev.some((x) => x.receiptId === m.receiptId) ? prev : [{ ...m, status: "DELIVERED" }, ...prev]));
+      sock.emit("instruction:ack", { receiptId: m.receiptId });
+      flash("New instruction from situation room");
+    };
+    sock.on("instruction", onInstr);
+    const hb = setInterval(() => sock.emit("presence"), 25000);
+    return () => { sock.off("instruction", onInstr); clearInterval(hb); };
+  }, []); // eslint-disable-line
+
   function flash(m: string) { setToast(m); setTimeout(() => setToast(""), 2500); }
+
+  function markRead(it: Instr) {
+    getSocket().emit("instruction:read", { receiptId: it.receiptId });
+    api(`/api/instructions/${it.id}/ack`, { method: "POST", body: JSON.stringify({ status: "READ" }) });
+    setInstructions((prev) => prev.map((x) => (x.receiptId === it.receiptId ? { ...x, status: "READ" } : x)));
+  }
 
   async function submit(body: any, files: { file: File; kind: string; sheetSigned?: boolean }[] = []) {
     const geo = await getGeo();
@@ -90,6 +114,21 @@ export default function AgentHome() {
           {queued > 0 && online && <button className="text-accent underline" onClick={() => drain()}>Sync now</button>}
         </div>
       </header>
+
+      {instructions.filter((i) => i.status !== "READ").length > 0 && (
+        <div className="mb-4 space-y-2">
+          {instructions.filter((i) => i.status !== "READ").map((it) => (
+            <div key={it.receiptId} className={`card p-3 ${it.severity === "CRITICAL" || it.severity === "HIGH" ? "border-bad" : "border-accent"}`}>
+              <div className="flex items-center justify-between">
+                <span className={`pill ${it.severity === "CRITICAL" || it.severity === "HIGH" ? "bg-bad/15 text-bad" : "bg-accent/10 text-accent"}`}>Instruction · {it.severity}</span>
+                <button className="text-xs text-accent underline" onClick={() => markRead(it)}>Mark read</button>
+              </div>
+              {it.title && <div className="mt-1 font-medium">{it.title}</div>}
+              <div className="mt-1 text-sm">{it.body}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mb-4 grid grid-cols-3 gap-1 rounded-lg bg-panel p-1 text-sm">
         {(["update", "scores", "incident"] as Mode[]).map((m) => (
