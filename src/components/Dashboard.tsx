@@ -45,7 +45,6 @@ export default function Dashboard({ session }: { session: Session }) {
   const [election, setElection] = useState<any>(null);
   const [feed, setFeed] = useState<Item[]>([]);
   const [tally, setTally] = useState<Tally | null>(null);
-  const [filter, setFilter] = useState<string>("ALL");
   const [big, setBig] = useState(false);
   const [summary, setSummary] = useState("");
   const [q, setQ] = useState(""); const [answer, setAnswer] = useState(""); const [asking, setAsking] = useState(false);
@@ -55,12 +54,56 @@ export default function Dashboard({ session }: { session: Session }) {
   const [instrBody, setInstrBody] = useState(""); const [instrSev, setInstrSev] = useState("INFO"); const [sending, setSending] = useState(false);
   const [instrLog, setInstrLog] = useState<any[]>([]);
 
+  const seenScores = useRef<Set<string>>(new Set());
+  const [splash, setSplash] = useState<null | { unit: string; lead: string; color: string; votes: number }>(null);
+  const splashTimer = useRef<any>(null);
+  const [soundOn, setSoundOn] = useState(true);
+  const soundOnRef = useRef(true);
+  useEffect(() => { soundOnRef.current = soundOn; }, [soundOn]);
+  const acRef = useRef<AudioContext | null>(null);
+
   async function loadTally() { const r = await api("/api/tally"); if (r.ok) setTally(await r.json()); }
-  async function loadFeed() { const r = await api("/api/submissions?limit=100"); if (r.ok) setFeed((await r.json()).submissions); }
+  async function loadFeed() {
+    const r = await api("/api/submissions?limit=100");
+    if (r.ok) {
+      const subs = (await r.json()).submissions as Item[];
+      subs.forEach((s) => { if (s.type === "SCORE") seenScores.current.add(s.id); }); // don't chime for history
+      setFeed(subs);
+    }
+  }
   async function loadSummary() { const r = await api("/api/ai/summary"); if (r.ok) setSummary((await r.json()).summary); }
   async function loadInstr() { const r = await api("/api/instructions"); if (r.ok) setInstrLog((await r.json()).instructions || []); }
   async function loadPresence() { const r = await api("/api/presence"); if (r.ok) setPresence(await r.json()); }
   function scheduleTally() { clearTimeout(tallyTimer.current); tallyTimer.current = setTimeout(loadTally, 800); }
+
+  // A short two-note chime on a fresh score (WebAudio — no asset, resumes on gesture).
+  function playChime() {
+    if (!soundOnRef.current) return;
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!acRef.current) acRef.current = new AC();
+      const ac = acRef.current!;
+      if (ac.state === "suspended") ac.resume();
+      const now = ac.currentTime;
+      [880, 1320].forEach((f, i) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = "sine"; o.frequency.value = f; o.connect(g); g.connect(ac.destination);
+        const t = now + i * 0.14;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.18, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+        o.start(t); o.stop(t + 0.24);
+      });
+    } catch { /* audio blocked until a gesture — silently ignore */ }
+  }
+
+  function triggerScoreArrival(it: Item) {
+    const top = [...(it.scores || [])].sort((a, b) => b.votes - a.votes)[0];
+    setSplash({ unit: it.unitLabel || "—", lead: top?.party || "", color: top?.color || "#6b7cff", votes: top?.votes || 0 });
+    clearTimeout(splashTimer.current);
+    splashTimer.current = setTimeout(() => setSplash(null), 5000);
+    playChime();
+  }
 
   useEffect(() => {
     api("/api/bootstrap").then(async (r) => r.ok && setElection((await r.json()).election));
@@ -69,8 +112,17 @@ export default function Dashboard({ session }: { session: Session }) {
     // Live over Socket.IO (bridged from the server event bus).
     const sock = getSocket();
     const onLive = (ev: any) => {
-      if (ev.kind === "submission") { setFeed((f) => [ev.payload as Item, ...f].slice(0, 200)); if ((ev.payload as Item).type === "SCORE") scheduleTally(); }
-      else if (ev.kind === "verify") { setFeed((f) => f.map((x) => (x.id === ev.payload.id ? { ...x, scoreStatus: ev.payload.status } : x))); scheduleTally(); }
+      if (ev.kind === "submission") {
+        const p = ev.payload as Item;
+        setFeed((f) => [p, ...f].slice(0, 200));
+        if (p.type === "SCORE") {
+          scheduleTally();
+          if (!seenScores.current.has(p.id)) { seenScores.current.add(p.id); triggerScoreArrival(p); }
+        }
+      } else if (ev.kind === "verify") {
+        setFeed((f) => f.map((x) => (x.id === ev.payload.id ? { ...x, scoreStatus: ev.payload.status } : x)));
+        scheduleTally();
+      }
     };
     sock.on("live", onLive);
     sock.on("presence:update", (p: any) => setPresence(p));
@@ -104,8 +156,23 @@ export default function Dashboard({ session }: { session: Session }) {
     const j = await r.json(); setAnswer(j.answer || j.error || "No answer"); setAsking(false);
   }
 
-  const shown = useMemo(() => (filter === "ALL" ? feed : feed.filter((x) => x.type === filter)), [feed, filter]);
-  const incidents = useMemo(() => feed.filter((x) => x.type === "INCIDENT"), [feed]);
+  // Scores grouped by polling unit; the unit with the newest report bubbles up.
+  const scoreGroups = useMemo(() => {
+    const m = new Map<string, Item[]>();
+    for (const it of feed) {
+      if (it.type !== "SCORE") continue;
+      const k = it.unitLabel || "—";
+      (m.get(k) ?? m.set(k, []).get(k)!).push(it);
+    }
+    return [...m.entries()]
+      .map(([unit, items]) => {
+        const sorted = [...items].sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+        return { unit, latest: sorted[0], count: items.length, lastAt: new Date(sorted[0].receivedAt).getTime() };
+      })
+      .sort((a, b) => b.lastAt - a.lastAt);
+  }, [feed]);
+  // Everything that isn't a score: incidents + casual updates/status, newest first.
+  const activity = useMemo(() => feed.filter((x) => x.type !== "SCORE"), [feed]);
   const maxVote = useMemo(() => Math.max(1, ...(tally?.leaderboard.flatMap((l) => [l.verified, l.declared]) || [1])), [tally]);
   const pct = (n: number) => Math.round((n / maxVote) * 100);
   const reportPct = tally ? Math.round((tally.reporting.verified / Math.max(1, tally.reporting.total)) * 100) : 0;
@@ -129,6 +196,7 @@ export default function Dashboard({ session }: { session: Session }) {
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {tally && <span className="pill bg-white/5 text-ink">Rep. <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> · {reportPct}%</span>}
           <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count} online</span>
+          <button className="btn-ghost px-2.5 py-1.5" title={soundOn ? "Mute score alerts" : "Unmute score alerts"} onClick={() => { setSoundOn((s) => !s); if (!soundOn) playChime(); }}>{soundOn ? "🔔" : "🔕"}</button>
           {!big && <ThemeToggle />}
           {!big && (session.role === "ADMIN" || session.role === "COORDINATOR") && <a href="/admin" className="btn-ghost px-3 py-1.5">Admin</a>}
           <button className="btn-ghost hidden px-3 py-1.5 sm:inline-flex" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
@@ -173,26 +241,39 @@ export default function Dashboard({ session }: { session: Session }) {
           )}
         </section>
 
-        {/* Live wall */}
-        <section className="card flex flex-col p-4 lg:col-span-1">
+        {/* Scores by unit */}
+        <section className="card flex flex-col p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Live wall</h2>
-            <select className="input w-auto py-1 text-xs" value={filter} onChange={(e) => setFilter(e.target.value)}>
-              <option value="ALL">All</option><option value="INCIDENT">Incidents</option><option value="SCORE">Scores</option><option value="MESSAGE">Messages</option><option value="STATUS">Status</option>
-            </select>
+            <h2 className="text-sm font-semibold">Scores by unit</h2>
+            <span className="pill bg-white/5 text-muted">{scoreGroups.length} unit{scoreGroups.length === 1 ? "" : "s"}</span>
           </div>
-          <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
-            {shown.map((it) => (
-              <article key={it.id} className="rounded-lg border border-line p-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className={`pill ${typeColor[it.type] || "bg-panel"}`}>{it.type}</span>
-                  <span className="text-muted">{fmt(it.receivedAt)}</span>
-                </div>
-                <div className="mt-1 text-sm">{it.text}</div>
-                {it.severity && <span className={`pill mt-1 ${sevColor[it.severity] || "bg-panel"}`}>{it.severity}</span>}
-                {!!it.scores?.length && (
-                  <div className="mt-2">
-                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+          {splash && (
+            <div key={splash.unit + splash.votes} className="splash-in mb-3 flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: splash.color, boxShadow: `0 0 22px ${splash.color}55` }}>
+              <PartyBadge code={splash.lead} color={splash.color} size={36} />
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: splash.color }}>New score in</div>
+                <div className="truncate text-sm font-bold">{splash.unit}</div>
+              </div>
+              <div className="ml-auto shrink-0 text-right">
+                <div className="text-[10px] uppercase tracking-wide text-muted">{splash.lead} leads</div>
+                <div className="tabular text-lg font-extrabold">{nf.format(splash.votes)}</div>
+              </div>
+            </div>
+          )}
+          <div className="max-h-[74vh] space-y-2 overflow-y-auto pr-1">
+            {scoreGroups.map((g) => {
+              const it = g.latest;
+              return (
+                <article key={g.unit} className="rounded-lg border border-line p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{g.unit}</div>
+                      <div className="text-[11px] text-muted">{fmt(it.receivedAt)} · {it.confidence || "—"} · {g.count} report{g.count === 1 ? "" : "s"}</div>
+                    </div>
+                    <span className={`pill shrink-0 ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus}</span>
+                  </div>
+                  {!!it.scores?.length && (
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                       {[...it.scores].sort((a, b) => b.votes - a.votes || a.party.localeCompare(b.party)).map((s, i) => (
                         <span key={i} className="flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] px-2 py-1.5">
                           <PartyBadge code={s.party} color={s.color} size={22} />
@@ -203,36 +284,61 @@ export default function Dashboard({ session }: { session: Session }) {
                         </span>
                       ))}
                     </div>
-                    {it.confidence && <span className="pill mt-2 bg-white/5">{it.confidence}</span>}
-                  </div>
-                )}
-                {!!it.media?.length && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {it.media.map((m, i) => m.mime.startsWith("video/")
-                      ? <video key={i} src={m.url} controls className="h-24 rounded border border-line" />
-                      : m.mime.startsWith("audio/")
-                        ? <audio key={i} src={m.url} controls className="w-full" />
-                        : <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.thumbUrl || m.url} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
-                  </div>
-                )}
-                <div className="mt-2 flex items-center justify-between text-xs text-muted">
-                  <span>{sourceLabel(it.author, it.unitLabel)}</span>
-                  {it.type === "SCORE" && (
-                    <span className="flex items-center gap-2">
-                      <span className={`pill ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus}</span>
-                      {canVerify && it.scoreStatus !== "VERIFIED" && <button className="text-good underline" onClick={() => verify(it.id, "VERIFIED")}>Verify</button>}
-                      {canVerify && it.scoreStatus !== "DISPUTED" && <button className="text-bad underline" onClick={() => verify(it.id, "DISPUTED")}>Dispute</button>}
-                    </span>
                   )}
-                </div>
-              </article>
-            ))}
-            {!shown.length && <p className="text-sm text-muted">Nothing yet.</p>}
+                  {!!it.media?.length && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {it.media.map((m, i) => m.mime.startsWith("video/")
+                        ? <video key={i} src={m.url} controls className="h-24 rounded border border-line" />
+                        : m.mime.startsWith("audio/")
+                          ? <audio key={i} src={m.url} controls className="w-full" />
+                          : <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.thumbUrl || m.url} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
+                    </div>
+                  )}
+                  {canVerify && (
+                    <div className="mt-2 flex items-center justify-end gap-3 text-xs">
+                      {it.scoreStatus !== "VERIFIED" && <button className="font-semibold text-good underline" onClick={() => verify(it.id, "VERIFIED")}>Verify</button>}
+                      {it.scoreStatus !== "DISPUTED" && <button className="font-semibold text-bad underline" onClick={() => verify(it.id, "DISPUTED")}>Dispute</button>}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+            {!scoreGroups.length && <p className="text-sm text-muted">No scores yet.</p>}
           </div>
         </section>
 
-        {/* Instructions + presence + AI + incidents */}
+        {/* Activity (incidents + updates) + AI + instructions */}
         <section className="space-y-4">
+          <div className="card flex flex-col p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Incidents &amp; updates</h2>
+              <span className="pill bg-white/5 text-muted">{activity.length}</span>
+            </div>
+            <div className="max-h-[46vh] space-y-2 overflow-y-auto pr-1">
+              {activity.map((it) => (
+                <article key={it.id} className={`rounded-lg border p-3 ${it.type === "INCIDENT" ? "border-bad/40 bg-bad/[0.04]" : "border-line"}`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={`pill ${typeColor[it.type] || "bg-panel"}`}>{it.type}</span>
+                    <span className="text-muted">{fmt(it.receivedAt)}</span>
+                  </div>
+                  {it.text && <div className="mt-1 text-sm">{it.text}</div>}
+                  {it.severity && <span className={`pill mt-1 ${sevColor[it.severity] || "bg-panel"}`}>{it.severity}</span>}
+                  {!!it.media?.length && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {it.media.map((m, i) => m.mime.startsWith("video/")
+                        ? <video key={i} src={m.url} controls className="h-24 rounded border border-line" />
+                        : m.mime.startsWith("audio/")
+                          ? <audio key={i} src={m.url} controls className="w-full" />
+                          : <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.thumbUrl || m.url} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
+                    </div>
+                  )}
+                  <div className="mt-2 text-xs text-muted">{sourceLabel(it.author, it.unitLabel)}</div>
+                </article>
+              ))}
+              {!activity.length && <p className="text-sm text-muted">No incidents or updates yet.</p>}
+            </div>
+          </div>
+
           {canVerify && (
             <div className="card p-4">
               <h2 className="mb-2 text-sm font-semibold">Send instruction to agents</h2>
@@ -243,7 +349,7 @@ export default function Dashboard({ session }: { session: Session }) {
                 </select>
                 <button className="btn-primary flex-1" disabled={sending || !instrBody.trim()} onClick={sendInstruction}>{sending ? "Sending…" : "Broadcast"}</button>
               </div>
-              <div className="mt-3 max-h-40 space-y-1 overflow-y-auto border-t border-line pt-2 text-xs">
+              <div className="mt-3 max-h-32 space-y-1 overflow-y-auto border-t border-line pt-2 text-xs">
                 {instrLog.map((i) => (
                   <div key={i.id} className="flex items-center justify-between">
                     <span className="truncate pr-2">{i.body}</span>
@@ -272,25 +378,6 @@ export default function Dashboard({ session }: { session: Session }) {
                 <button className="btn-primary" disabled={asking} onClick={ask}>{asking ? "…" : "Ask"}</button>
               </div>
               {answer && <div className="mt-2 whitespace-pre-wrap rounded-lg bg-panel p-3 text-sm">{answer}</div>}
-            </div>
-          </div>
-
-          <div className="card p-4">
-            <h2 className="mb-2 text-sm font-semibold">Incident board</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {incidents.slice(0, 8).map((it) => (
-                <div key={it.id} className="rounded-lg border border-line p-2">
-                  {it.media?.[0] && !it.media[0].mime.startsWith("audio/") && (
-                    it.media[0].mime.startsWith("video/")
-                      ? <video src={it.media[0].url} className="mb-1 h-20 w-full rounded object-cover" />
-                      : <img src={it.media[0].thumbUrl || it.media[0].url} className="mb-1 h-20 w-full rounded object-cover" alt="" />
-                  )}
-                  <span className={`pill ${sevColor[it.severity || "INFO"]}`}>{it.severity}</span>
-                  <div className="mt-1 line-clamp-2 text-xs">{it.text}</div>
-                  <div className="text-[10px] text-muted">{it.unitLabel}</div>
-                </div>
-              ))}
-              {!incidents.length && <p className="col-span-2 text-sm text-muted">No incidents.</p>}
             </div>
           </div>
         </section>

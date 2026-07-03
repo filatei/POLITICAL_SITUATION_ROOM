@@ -21,11 +21,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Google verification failed." }, { status: 401 });
   }
   if (!email) return NextResponse.json({ error: "No email in Google token." }, { status: 401 });
+  const key = email.toLowerCase();
 
-  const user = await db.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) return NextResponse.json({ error: "This Google account is not authorized." }, { status: 403 });
-  if (!user.googleSub && sub) await db.user.update({ where: { id: user.id }, data: { googleSub: sub } });
+  // 1) Staff (room/admin) — matched in the User table.
+  const user = await db.user.findUnique({ where: { email: key } });
+  if (user) {
+    if (!user.googleSub && sub) await db.user.update({ where: { id: user.id }, data: { googleSub: sub } });
+    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL" };
+    return withToken(session);
+  }
 
-  const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL" };
-  return withToken(session);
+  // 2) Field agent — Google email must be pre-profiled by an admin on the agent record.
+  const agent = await db.agent.findUnique({
+    where: { email: key },
+    include: { pollingUnit: { include: { ward: true, lga: true, state: true } } },
+  });
+  if (agent) {
+    if (agent.status === "SUSPENDED") return NextResponse.json({ error: "This agent is suspended." }, { status: 403 });
+    await db.agent.update({ where: { id: agent.id }, data: { inviteUsedAt: agent.inviteUsedAt ?? new Date(), status: "ACTIVE" } });
+    const session: Session = {
+      sub: agent.id, kind: "agent", name: agent.name, role: "AGENT",
+      scope: agent.scope, unitId: agent.pollingUnitId, electionId: agent.electionId,
+    };
+    const unit = agent.pollingUnit
+      ? { id: agent.pollingUnit.id, name: agent.pollingUnit.name,
+          label: `${agent.pollingUnit.name} · ${agent.pollingUnit.ward.name} · ${agent.pollingUnit.lga.name} · ${agent.pollingUnit.state.name}` }
+      : null;
+    return withToken(session, { unit });
+  }
+
+  return NextResponse.json({ error: "This Google account is not authorized. Ask an admin to enrol your email." }, { status: 403 });
 }

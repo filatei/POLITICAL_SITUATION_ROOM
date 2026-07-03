@@ -82,6 +82,7 @@ export default function AgentHome() {
   const [unit, setUnit] = useState<Unit>(null);
   const [queued, setQueued] = useState(0);
   const [toast, setToast] = useState<ToastT>(null);
+  const [burst, setBurst] = useState<{ title: string; sub: string } | null>(null);
   const [instructions, setInstructions] = useState<Instr[]>([]);
   const [menu, setMenu] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -147,7 +148,10 @@ export default function AgentHome() {
       media.push({ blob, mime: blob.type || f.file.type, kind: f.kind, sheetSigned: f.sheetSigned });
     }
     await enqueue({ clientUid: uuid(), body: { ...body, ...geo, capturedAt: new Date().toISOString() }, media, createdAt: Date.now(), tries: 0 });
-    notify(online ? "Sent to situation room" : "Saved — will sync when online", online ? "success" : "info");
+    const kind = body.type === "SCORE" ? "Scores" : body.type === "INCIDENT" ? "Incident" : "Update";
+    setBurst({ title: online ? "Sent!" : "Saved offline", sub: online ? `${kind} delivered to the situation room` : `${kind} will sync when you're back online` });
+    window.clearTimeout((submit as any)._t);
+    (submit as any)._t = window.setTimeout(() => setBurst(null), 1600);
   }
 
   const initials = (session?.name || "A").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
@@ -223,7 +227,7 @@ export default function AgentHome() {
 
       {mode === "update" && <UpdateForm onSend={submit} notify={notify} />}
       {mode === "scores" && <ScoresForm cands={cands} unit={unit} onSend={submit} notify={notify} />}
-      {mode === "incident" && <IncidentForm onSend={submit} />}
+      {mode === "incident" && <IncidentForm onSend={submit} notify={notify} />}
 
       {settings && <SettingsSheet onClose={() => setSettings(false)} notify={notify} />}
 
@@ -232,6 +236,18 @@ export default function AgentHome() {
           toast.type === "error" ? "bg-bad text-white shadow-bad/30" : toast.type === "info" ? "border border-line bg-panel text-ink" : "bg-good text-white shadow-good/30"}`}>
           <span>{toast.type === "error" ? "✕" : toast.type === "info" ? "•" : "✓"}</span>
           {toast.msg}
+        </div>
+      )}
+
+      {burst && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-[2px]" onClick={() => setBurst(null)}>
+          <div className="check-burst flex flex-col items-center gap-3 text-center">
+            <div className="grid h-24 w-24 place-items-center rounded-full bg-good text-white shadow-2xl shadow-good/40">
+              <span className="text-5xl">✓</span>
+            </div>
+            <div className="text-lg font-bold text-white drop-shadow">{burst.title}</div>
+            <div className="max-w-[80vw] text-sm text-white/80">{burst.sub}</div>
+          </div>
         </div>
       )}
     </main>
@@ -335,27 +351,6 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
   const [sheet, setSheet] = useState<File | null>(null);
   const totalVotes = cands.reduce((s, c) => s + (Number(votes[c.id]) || 0), 0);
 
-  async function speakNumbers() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { notify("Voice isn't supported on this browser", "error"); return; }
-    const micErr = await ensureMic();
-    if (micErr) { notify(micErr, "error"); return; }
-    const rec = new SR(); rec.lang = "en-NG"; rec.interimResults = false; rec.maxAlternatives = 1;
-    rec.onresult = (e: any) => {
-      const said = e.results[0][0].transcript.toUpperCase();
-      const next = { ...votes };
-      let hits = 0;
-      for (const c of cands) {
-        const m = said.match(new RegExp(`${c.party}\\D+(\\d+)`));
-        if (m) { next[c.id] = m[1]; hits++; }
-      }
-      setVotes(next);
-      notify(hits ? `Captured ${hits} value${hits > 1 ? "s" : ""}` : "No party numbers detected", hits ? "success" : "error");
-    };
-    rec.onerror = (e: any) => notify(voiceError(e?.error || "error"), "error");
-    try { rec.start(); } catch { notify("Could not start voice capture", "error"); }
-  }
-
   async function send() {
     const scores = cands.map((c) => ({ candidateId: c.id, votes: Number(votes[c.id] || 0) }));
     await onSend(
@@ -371,10 +366,7 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
 
   return (
     <div className="card space-y-3 p-4">
-      <div className="flex items-center justify-between">
-        <label className="label mb-0">Votes per party</label>
-        <button className="text-xs font-semibold text-accent" onClick={speakNumbers}>🎙 Speak numbers</button>
-      </div>
+      <label className="label">Votes per party</label>
       <div className="space-y-2">
         {cands.map((c) => (
           <div key={c.id} className="flex items-center gap-2.5">
@@ -413,14 +405,33 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
 }
 
 /* ---------------- Incident ---------------- */
-function IncidentForm({ onSend }: { onSend: (b: any, f?: any[]) => Promise<void> }) {
+function IncidentForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promise<void>; notify: Notify }) {
   const [text, setText] = useState("");
   const [severity, setSeverity] = useState<"INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL">("MEDIUM");
   const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const MAX = 25 * 1024 * 1024; // server upload cap
+
+  function pick(f: File | null) {
+    if (preview) URL.revokeObjectURL(preview);
+    if (!f) { setFile(null); setPreview(""); return; }
+    if (f.size > MAX) {
+      notify(`That file is ${(f.size / 1048576).toFixed(0)}MB — max is 25MB. Try a photo or a shorter clip.`, "error");
+      setFile(null); setPreview(""); return;
+    }
+    setFile(f);
+    setPreview(f.type.startsWith("image/") ? URL.createObjectURL(f) : "");
+  }
 
   async function send() {
-    await onSend({ type: "INCIDENT", channel: "TEXT", text, severity }, file ? [{ file, kind: "INCIDENT" }] : []);
-    setText(""); setFile(null); setSeverity("MEDIUM");
+    if (!text.trim() && !file) { notify("Add a description or a photo/video.", "error"); return; }
+    setBusy(true);
+    try {
+      await onSend({ type: "INCIDENT", channel: "TEXT", text, severity }, file ? [{ file, kind: "INCIDENT" }] : []);
+      if (preview) URL.revokeObjectURL(preview);
+      setText(""); setFile(null); setPreview(""); setSeverity("MEDIUM");
+    } finally { setBusy(false); }
   }
 
   return (
@@ -436,10 +447,22 @@ function IncidentForm({ onSend }: { onSend: (b: any, f?: any[]) => Promise<void>
         </select>
       </div>
       <div>
-        <label className="label">Photo or video</label>
-        <input className="input" type="file" accept="image/*,video/*" capture="environment" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <label className="label">Photo or video (optional)</label>
+        <input className="input" type="file" accept="image/*,video/*" onChange={(e) => pick(e.target.files?.[0] || null)} />
+        {file && (
+          <div className="mt-2 flex items-center gap-3 rounded-lg border border-line bg-white/[0.03] p-2">
+            {preview
+              ? <img src={preview} alt="" className="h-14 w-14 rounded object-cover" />
+              : <span className="grid h-14 w-14 place-items-center rounded bg-ink/10 text-lg">🎬</span>}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">{file.name}</div>
+              <div className="text-xs text-muted">{(file.size / 1048576).toFixed(1)} MB · attached</div>
+            </div>
+            <button type="button" className="text-xs text-bad hover:underline" onClick={() => pick(null)}>Remove</button>
+          </div>
+        )}
       </div>
-      <button className="btn-primary w-full" disabled={!text.trim()} onClick={send}>Report incident</button>
+      <button className="btn-primary w-full" disabled={busy || (!text.trim() && !file)} onClick={send}>{busy ? "Reporting…" : "Report incident"}</button>
     </div>
   );
 }

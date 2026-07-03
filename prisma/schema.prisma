@@ -198,6 +198,7 @@ model Agent {
   election      Election    @relation(fields: [electionId], references: [id])
   name          String
   phone         String?
+  email         String?     @unique  // pre-profiled Google email for agent sign-in
   role          Role        @default(AGENT)
   scope         Scope       @default(PU)
   pollingUnitId String?

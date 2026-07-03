@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   });
   return NextResponse.json({
     agents: agents.map((a) => ({
-      id: a.id, name: a.name, phone: a.phone, inviteCode: a.inviteCode, status: a.status,
+      id: a.id, name: a.name, phone: a.phone, email: a.email, inviteCode: a.inviteCode, status: a.status,
       usedAt: a.inviteUsedAt, lastSeenAt: a.lastSeenAt,
       unitLabel: a.pollingUnit ? `${a.pollingUnit.name} · ${a.pollingUnit.ward.name} · ${a.pollingUnit.lga.name}` : "—",
     })),
@@ -32,8 +32,11 @@ async function uniqueCode(): Promise<string> {
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN", "COORDINATOR"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { name, phone, pollingUnitId } = await req.json();
+  const { name, phone, email, pollingUnitId } = await req.json();
   if (!name || !pollingUnitId) return NextResponse.json({ error: "Name and polling unit are required." }, { status: 400 });
+  const cleanEmail = email ? String(email).trim().toLowerCase() : null;
+  if (cleanEmail && await db.agent.findUnique({ where: { email: cleanEmail } }))
+    return NextResponse.json({ error: "That Google email is already enrolled for another agent." }, { status: 409 });
 
   const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
@@ -42,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const code = await uniqueCode();
   const agent = await db.agent.create({
-    data: { electionId: election.id, name, phone: phone || null, scope: "PU", pollingUnitId, inviteCode: code, status: "INVITED" },
+    data: { electionId: election.id, name, phone: phone || null, email: cleanEmail, scope: "PU", pollingUnitId, inviteCode: code, status: "INVITED" },
   });
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:create", entity: "Agent", entityId: agent.id, meta: { unit: pu.name } } });
   return NextResponse.json({ ok: true, agent: { id: agent.id, name: agent.name, inviteCode: agent.inviteCode, unitLabel: `${pu.name} · ${pu.ward.name} · ${pu.lga.name}` } });

@@ -8,7 +8,7 @@ import type { Session } from "@/lib/auth";
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
 type Lga = { id: string; name: string };
-type Agent = { id: string; name: string; phone?: string; inviteCode: string; status: string; unitLabel: string; usedAt?: string | null; lastSeenAt?: string | null };
+type Agent = { id: string; name: string; phone?: string; email?: string | null; inviteCode: string; status: string; unitLabel: string; usedAt?: string | null; lastSeenAt?: string | null };
 
 export default function AdminPage() {
   const [state, setState] = useState<"loading" | "in" | "out" | "denied">("loading");
@@ -39,16 +39,17 @@ export default function AdminPage() {
         </div>
       </main>
     );
-  return <Console />;
+  return <Console session={session!} />;
 }
 
-function Console() {
+function Console({ session }: { session: Session }) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [lgas, setLgas] = useState<Lga[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [q, setQ] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [agentEmail, setAgentEmail] = useState("");
   const [unitId, setUnitId] = useState("");
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
@@ -77,10 +78,10 @@ function Console() {
   async function createAgent() {
     if (!name.trim() || !unitId) return;
     setBusy(true);
-    const r = await api("/api/admin/agents", { method: "POST", body: JSON.stringify({ name, phone, pollingUnitId: unitId }) });
+    const r = await api("/api/admin/agents", { method: "POST", body: JSON.stringify({ name, phone, email: agentEmail, pollingUnitId: unitId }) });
     setBusy(false);
     const j = await r.json();
-    if (r.ok) { setFlash(`Created ${j.agent.name} — code ${j.agent.inviteCode}`); setName(""); setPhone(""); load(); }
+    if (r.ok) { setFlash(`Created ${j.agent.name} — code ${j.agent.inviteCode}`); setName(""); setPhone(""); setAgentEmail(""); load(); }
     else setFlash(j.error || "Failed");
   }
 
@@ -129,6 +130,7 @@ function Console() {
           <div className="space-y-3">
             <div><label className="label">Agent name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></div>
             <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
+            <div><label className="label">Google email (optional — lets them sign in with Google)</label><input className="input" value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} inputMode="email" placeholder="agent@gmail.com" /></div>
             <div>
               <label className="label">Polling unit {unitId && <span className="text-good">· selected</span>}</label>
               <input className="input mb-2" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search unit / ward / LGA…" />
@@ -184,6 +186,7 @@ function Console() {
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{a.name}</div>
                     <div className="truncate text-xs text-muted">{a.unitLabel}</div>
+                    {a.email && <div className="truncate text-[11px] text-accent">🔑 {a.email}</div>}
                   </div>
                   <span className={`pill ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.status === "SUSPENDED" ? "bg-bad/15 text-bad" : "bg-ink/5 text-muted"}`}>{a.status}</span>
                 </div>
@@ -198,8 +201,9 @@ function Console() {
         </section>
       </main>
 
-      <div className="p-5 pt-0">
+      <div className="space-y-4 p-5 pt-0">
         <TallyOverride units={units} onFlash={setFlash} />
+        {session.role === "ADMIN" && <StaffUsers onFlash={setFlash} />}
       </div>
 
       {qr && <QrModal code={qr.code} label={qr.label} onClose={() => setQr(null)} onCopy={copyText} />}
@@ -318,6 +322,90 @@ function TallyOverride({ units, onFlash }: { units: Unit[]; onFlash: (s: string)
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+type StaffUser = { id: string; email: string; name: string; role: string; hasPassword: boolean; hasGoogle: boolean; createdAt: string };
+
+function StaffUsers({ onFlash }: { onFlash: (s: string) => void }) {
+  const [users, setUsers] = useState<StaffUser[]>([]);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"ADMIN" | "COORDINATOR" | "ANALYST">("ANALYST");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState("");
+
+  async function load() {
+    const r = await api("/api/admin/users");
+    if (r.ok) setUsers((await r.json()).users);
+  }
+  useEffect(() => { load(); }, []);
+
+  function edit(u: StaffUser) {
+    setEditingId(u.id); setName(u.name); setEmail(u.email); setRole(u.role as any); setPassword("");
+  }
+  function reset() { setEditingId(""); setName(""); setEmail(""); setRole("ANALYST"); setPassword(""); }
+
+  async function save() {
+    if (!name.trim() || !email.trim() || (!editingId && password.length < 6)) {
+      onFlash(!editingId && password.length < 6 ? "New staff need a password (min 6 chars)." : "Enter a name and email.");
+      return;
+    }
+    setBusy(true);
+    const body: any = { name, email, role };
+    if (password) body.password = password;
+    const r = await api("/api/admin/users", { method: "POST", body: JSON.stringify(body) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { onFlash(j.edited ? `Updated ${j.user.email}` : `Enrolled ${j.user.email} as ${j.user.role}`); reset(); load(); }
+    else onFlash(j.error?.formErrors?.[0] || j.error?.fieldErrors?.password?.[0] || j.error || "Failed");
+  }
+
+  const roleColor: Record<string, string> = { ADMIN: "bg-accent/15 text-accent", COORDINATOR: "bg-good/15 text-good", ANALYST: "bg-ink/10 text-muted" };
+
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Staff accounts</h2>
+      <p className="mb-3 text-[11px] text-muted">Enrol room staff with an email + password. They sign in on the staff screen. Admins manage everything; Coordinators &amp; Analysts can verify scores and see the room.</p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-3">
+          <div><label className="label">Full name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" /></div>
+          <div><label className="label">Email {editingId && <span className="text-muted">· sign-in unchanged</span>}</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="jane@org.ng" disabled={!!editingId} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label">Role</label>
+              <select className="input" value={role} onChange={(e) => setRole(e.target.value as any)}>
+                <option value="ADMIN">Admin</option>
+                <option value="COORDINATOR">Coordinator</option>
+                <option value="ANALYST">Analyst</option>
+              </select>
+            </div>
+            <div><label className="label">{editingId ? "New password (optional)" : "Password"}</label><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={editingId ? "leave blank to keep" : "min 6 chars"} /></div>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn-primary flex-1" disabled={busy} onClick={save}>{busy ? "Saving…" : editingId ? "Save changes" : "Enrol staff"}</button>
+            {editingId && <button className="btn-ghost" onClick={reset}>Cancel</button>}
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Enrolled staff ({users.length})</label>
+          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+            {users.map((u) => (
+              <button key={u.id} onClick={() => edit(u)} className={`flex w-full items-center justify-between gap-2 rounded-lg border p-2.5 text-left ${editingId === u.id ? "border-accent/50 bg-accent/10" : "border-line hover:bg-ink/5"}`}>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{u.name}</span>
+                  <span className="block truncate text-xs text-muted">{u.email}{u.hasGoogle ? " · Google" : ""}{u.hasPassword ? "" : " · no password set"}</span>
+                </span>
+                <span className={`pill shrink-0 ${roleColor[u.role] || "bg-ink/10 text-muted"}`}>{u.role}</span>
+              </button>
+            ))}
+            {!users.length && <p className="text-sm text-muted">No staff yet.</p>}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
