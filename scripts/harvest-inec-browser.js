@@ -47,7 +47,9 @@
 
   const getLgas = (s) => j(`${BASE}lgaView.php?state_id=${enc(s)}`).then((a) => a.map((x) => String(x.lga)).filter(Boolean));
   const getWards = (s, l) => j(`${BASE}wardView.php?state_id=${enc(s)}&lga_id=${enc(l)}`).then((a) => a.map((x) => String(x.ward)).filter(Boolean));
-  const getUnits = (s, l, w) => j(`${BASE}pollingView.php?state_id=${enc(s)}&lga_id=${enc(l)}&ward_id=${enc(w)}`);
+  // Units fail fast (fewer retries) so a persistently-dead ward is skipped quickly
+  // instead of stalling the whole run for ~40s each.
+  const getUnits = (s, l, w, tries = 4) => j(`${BASE}pollingView.php?state_id=${enc(s)}&lga_id=${enc(l)}&ward_id=${enc(w)}`, tries);
 
   async function pool(items, n, fn) {
     let i = 0;
@@ -97,26 +99,30 @@
     };
     for (const lga of lgas) {
       let wl = [];
-      try { wl = await getWards(state, lga); } catch (e) { console.warn(`   ${state}: ward list failed for ${lga}`); }
+      // If an LGA's ward list itself is unreachable, skip the whole LGA and move on.
+      try { wl = await getWards(state, lga); }
+      catch (e) { console.warn(`   ⤼ ${state}: ward list unreachable for LGA "${lga}" — skipping LGA, continuing`); failed.push([lga, "(ward-list)"]); continue; }
       wards += wl.length;
-      // A single flaky ward must NOT abort the whole state — collect & retry later.
+      // A flaky ward must NOT abort the LGA or state — collect & retry once at the end.
       await pool(wl, 3, async (ward) => {
         try { push(await getUnits(state, lga, ward), lga, ward); }
         catch (e) { failed.push([lga, ward]); }
       });
-      console.log(`   ${state}: ${lga} — total ${units.length} units${failed.length ? ` (${failed.length} wards to retry)` : ""}`);
+      console.log(`   ${state}: ${lga} — ${units.length} units so far${failed.length ? ` · ${failed.length} to retry` : ""}`);
     }
+    // Second pass over failures; whatever still fails is recorded as a gap and skipped.
+    const gaps = [];
     if (failed.length) {
-      console.warn(`${state}: retrying ${failed.length} failed wards…`);
-      const still = [];
+      console.warn(`${state}: retrying ${failed.length} unreachable ward(s) once…`);
       for (const [lga, ward] of failed) {
-        try { push(await getUnits(state, lga, ward), lga, ward); } catch (e) { still.push([lga, ward]); }
-        await sleep(500);
+        if (ward === "(ward-list)") { gaps.push({ lga, ward: "*", reason: "ward-list unreachable" }); continue; }
+        try { push(await getUnits(state, lga, ward, 5), lga, ward); }
+        catch (e) { gaps.push({ lga, ward, reason: "polling units unreachable" }); }
       }
-      if (still.length) console.warn(`${state}: ${still.length} wards still failed — file saved anyway, re-run to fill gaps`);
+      if (gaps.length) console.warn(`   ⤼ ${state}: ${gaps.length} ward(s) still unreachable (likely an INEC-side gap) — skipped & recorded in payload.gaps. Re-run later to retry.`);
     }
-    const payload = { state, harvestedAt: new Date().toISOString(), lgas: lgas.length, wards, count: units.length, units };
-    console.log(`✓ ${state}: ${lgas.length} LGAs · ${wards} wards · ${units.length} units (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+    const payload = { state, harvestedAt: new Date().toISOString(), lgas: lgas.length, wards, count: units.length, gaps, units };
+    console.log(`✓ ${state}: ${lgas.length} LGAs · ${wards} wards · ${units.length} units${gaps.length ? ` · ${gaps.length} gap ward(s)` : ""} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     return payload;
   }
 
