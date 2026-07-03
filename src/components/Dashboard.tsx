@@ -77,7 +77,9 @@ export default function Dashboard({ session }: { session: Session }) {
     sock.on("receipt:update", () => loadInstr());
     sock.on("instruction:new", () => loadInstr());
 
-    const poll = setInterval(() => { loadTally(); }, 20000);
+    // Poll tally + presence as a fallback: Cloudflare idles websockets out after
+    // ~100s, so we can't rely on presence:update alone to keep "online" current.
+    const poll = setInterval(() => { loadTally(); loadPresence(); }, 15000);
     const aiPoll = setInterval(loadSummary, 60000);
     return () => { sock.off("live", onLive); sock.off("presence:update"); sock.off("receipt:update"); sock.off("instruction:new"); clearInterval(poll); clearInterval(aiPoll); };
   }, []); // eslint-disable-line
