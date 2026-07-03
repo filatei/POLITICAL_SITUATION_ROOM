@@ -302,8 +302,16 @@ model AuditLog {
   @@index([entity, entityId])
 }
 
-enum PaymentProvider { PAYSTACK SQUAD }
-enum PaymentStatus { PENDING PAID FAILED }
+enum PaymentProvider {
+  PAYSTACK
+  SQUAD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
 
 // One subscription per election: 10 free seats to trial, plus purchased seats.
 // A "seat" = one agent code. Available = freeSeats + paidSeats - codes created.

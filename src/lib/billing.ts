@@ -1,4 +1,4 @@
-export const SEAT_PRICE_NAIRA = 1000;
+export const SEAT_PRICE_NAIRA = 10000;
 export const SEAT_PRICE_KOBO = SEAT_PRICE_NAIRA * 100;
 export const DEFAULT_FREE_SEATS = 10;
 
