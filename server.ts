@@ -11,6 +11,7 @@ import { db } from "./src/lib/db";
 import { setIO, markOnline, markOffline, broadcastPresence, emitDashboard } from "./src/lib/realtime";
 import { reconcilePending } from "./src/lib/billing-credit";
 import { paystackEnabled, squadEnabled } from "./src/lib/payments";
+import { ensureKnowledgeSeeded } from "./src/lib/knowledge";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT || 3200);
@@ -102,6 +103,11 @@ app.prepare().then(() => {
   // Bridge the existing in-process event bus (POST routes publish to it) to the
   // dashboard room, so the live wall works over sockets with zero route changes.
   subscribe((evt) => io.to("dashboard").emit("live", evt));
+
+  // Seed the AI knowledge base (Electoral Act + summaries) on first boot.
+  ensureKnowledgeSeeded()
+    .then((r) => { if (r.seeded) console.log(`> knowledge base seeded: ${r.chunks} chunks`); })
+    .catch(() => {});
 
   // Auto-reconcile billing: since a shared merchant's single webhook may live in
   // another app, verify PENDING payments directly with Paystack/Squad on a timer

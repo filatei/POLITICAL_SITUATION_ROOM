@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+import path from "path";
 import { db } from "@/lib/db";
 
 // What the assistant should know about THIS app, so it can answer "how do I…" and
@@ -77,6 +79,29 @@ export function chunkText(text: string, maxLen = 1500): string[] {
   }
   if (buf) chunks.push(buf);
   return chunks;
+}
+
+// On first boot, load the curated summaries + the bundled full Electoral Act 2026
+// so the assistant is grounded without any manual admin step.
+export async function ensureKnowledgeSeeded(): Promise<{ seeded: boolean; chunks: number }> {
+  const count = await db.knowledgeChunk.count();
+  if (count > 0) return { seeded: false, chunks: count };
+
+  await db.knowledgeChunk.createMany({ data: SEED_KNOWLEDGE });
+  let added = SEED_KNOWLEDGE.length;
+
+  let text = "";
+  for (const p of ["LEGAL/electoral-act-2026.txt", "./LEGAL/electoral-act-2026.txt"]) {
+    try { text = await readFile(path.join(process.cwd(), p), "utf8"); break; } catch { /* try next */ }
+  }
+  if (text.trim()) {
+    const chunks = chunkText(text, 1500);
+    await db.knowledgeChunk.createMany({
+      data: chunks.map((content, i) => ({ source: "electoral-act-2026", title: `Electoral Act 2026 — part ${i + 1}`, content, ord: i + 1 })),
+    });
+    added += chunks.length;
+  }
+  return { seeded: true, chunks: added };
 }
 
 // Keyword retrieval over the knowledge base (small enough to score in memory).

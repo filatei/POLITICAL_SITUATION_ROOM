@@ -302,6 +302,15 @@ model AuditLog {
   @@index([entity, entityId])
 }
 
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String?
+  message   String
+  createdAt DateTime @default(now())
+}
+
 // White-label branding (single row per deployment/tenant).
 model Branding {
   id         String   @id @default("default")

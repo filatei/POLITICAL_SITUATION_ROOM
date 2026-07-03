@@ -1,5 +1,6 @@
 import Link from "next/link";
 import AiChat from "@/components/AiChat";
+import ContactForm from "@/components/ContactForm";
 import { getBrand } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -156,6 +157,32 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section className="border-t border-line">
+        <div className="mx-auto max-w-3xl px-5 py-16">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Frequently asked questions</h2>
+          <div className="mt-6 divide-y divide-line overflow-hidden rounded-xl border border-line">
+            {[
+              { q: `Is this the official INEC result?`, a: `No. ${brand.name} is a parallel, independent citizen/party count. Figures are field reports pending verification; the official result is declared only by INEC.` },
+              { q: `Who is it for?`, a: `Political parties, campaigns, election-observer groups and CSOs who want their own real-time, verified view of results and incidents from the field.` },
+              { q: `How do field agents report?`, a: `Through an offline-first mobile web app (PWA). They sign in with an admin-issued invite code / QR link or a pre-authorised Google account, then send scores, messages, incidents and photos — queued and synced even on poor networks, with GPS.` },
+              { q: `Which elections does it support?`, a: `Any Nigerian election — Presidential, Governorship, Senatorial, House of Reps, State Assembly, LG Chairman and Councillor. The polling structure (State → LGA → Ward → Unit) is the same; only the constituency, candidates and win-rule change.` },
+              { q: `Is our data private?`, a: `Yes. Live results, agent reports and analytics are visible only to your signed-in staff inside the situation room. The public assistant answers only about the Electoral Act — never your data.` },
+              { q: `What does it cost?`, a: `The first 10 agent seats are free to trial. Extra seats are ₦10,000 each, one-off per election. Use the in-app calculator (units × agents per unit) to size your plan, and pay by Paystack or Squad.` },
+              { q: `Can we use our own brand and domain?`, a: `Yes — it's white-label. Set your name, logo, accent colour, candidates and constituency; run it on your own domain. Contact us to set up a tenancy.` },
+            ].map((f) => (
+              <details key={f.q} className="group bg-surface/40 open:bg-white/[0.03]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 font-medium hover:bg-white/[0.03]">
+                  <span>{f.q}</span>
+                  <span className="shrink-0 text-muted transition group-open:rotate-45">＋</span>
+                </summary>
+                <div className="px-5 pb-4 text-sm text-muted">{f.a}</div>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Public Act assistant */}
       <section className="border-t border-line bg-white/[0.02]">
         <div className="mx-auto max-w-3xl px-5 py-16">
@@ -168,11 +195,44 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Contact */}
+      <section id="contact" className="border-t border-line">
+        <div className="mx-auto grid max-w-6xl gap-8 px-5 py-16 lg:grid-cols-2">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Contact us</h2>
+            <p className="mt-2 text-muted">Setting up a monitoring room for your election, or want a white-label tenancy? Send us a note.</p>
+            <div className="mt-6 space-y-1 text-sm">
+              <div className="font-semibold text-ink">TORAMA GLOBAL SERVICES LTD</div>
+              <div className="text-muted">Email: <a className="text-accent hover:underline" href="mailto:hello@torama.money">hello@torama.money</a></div>
+              <div className="text-muted">Web: <a className="text-accent hover:underline" href="https://torama.money" target="_blank" rel="noreferrer">torama.money</a></div>
+            </div>
+          </div>
+          <ContactForm />
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-line">
-        <div className="mx-auto max-w-6xl px-5 py-8 text-xs text-muted">
-          <p><b className="text-ink">{brand.name}</b> — a parallel, independent citizen/party election monitor. It is <b>not</b> the official INEC result. Figures shown are field reports pending verification.</p>
-          <p className="mt-2">Staff sign in inside the dashboard. Agents use an invite code / QR link or a pre-authorised Google account.</p>
+        <div className="mx-auto max-w-6xl px-5 py-8">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              {brand.logoUrl
+                ? <img src={brand.logoUrl} alt="" className="h-6 w-6 rounded object-contain" />
+                : <span className="live-dot text-bad"><span className="block h-2 w-2 rounded-full bg-bad" /></span>}
+              <span className="text-sm font-bold">{brand.name}</span>
+            </div>
+            <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted">
+              <Link href="/terms" className="hover:text-ink">Terms</Link>
+              <Link href="/privacy" className="hover:text-ink">Privacy</Link>
+              <a href="#contact" className="hover:text-ink">Contact</a>
+              <Link href="/agent/login" className="hover:text-ink">Agent</Link>
+              <Link href="/room" className="hover:text-ink">Room</Link>
+            </nav>
+          </div>
+          <div className="mt-6 border-t border-line pt-6 text-xs text-muted">
+            <p><b className="text-ink">{brand.name}</b> is a parallel, independent citizen/party election monitor — <b>not</b> the official INEC result. Figures shown are field reports pending verification.</p>
+            <p className="mt-2">© {new Date().getFullYear()} TORAMA GLOBAL SERVICES LTD. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </main>
