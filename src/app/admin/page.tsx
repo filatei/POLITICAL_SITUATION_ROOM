@@ -56,6 +56,7 @@ function Console({ session }: { session: Session }) {
   const [unitId, setUnitId] = useState("");
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
+  const [tab, setTab] = useState<AdminTab>("codes");
   const [bulkLga, setBulkLga] = useState("");
   const [perUnit, setPerUnit] = useState("1");
   const [bulkResult, setBulkResult] = useState<{ name: string; inviteCode: string; unitLabel: string }[] | null>(null);
