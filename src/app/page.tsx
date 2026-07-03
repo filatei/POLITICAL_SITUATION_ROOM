@@ -1,5 +1,4 @@
 import Link from "next/link";
-import AiChat from "@/components/AiChat";
 import ContactForm from "@/components/ContactForm";
 import Onboard from "@/components/Onboard";
 import { getBrand } from "@/lib/brand";
@@ -31,18 +30,11 @@ export default async function Home() {
     <main className="min-h-dvh">
       {/* Nav */}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur-md">
-        <div className="mx-auto max-w-6xl px-5 py-3">
-          {/* Row 1: logo stands alone. */}
-          <div className="flex items-center">
-            {brand.logoUrl
-              ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[132px] object-contain" />
-              : <><span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span><span className="font-bold tracking-tight">{brand.name}</span></>}
-          </div>
-          {/* Row 2: navigation actions. */}
-          <div className="mt-2.5 flex items-center justify-end gap-2 text-sm">
-            <Link href="/agent/login" className="btn-ghost px-3 py-1.5">Field agent</Link>
-            <Link href="/room" className="btn-primary px-3 py-1.5">Enter room</Link>
-          </div>
+        <div className="mx-auto flex max-w-6xl items-center px-5 py-3.5">
+          {/* Logo stands alone on the landing header. */}
+          {brand.logoUrl
+            ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[132px] object-contain" />
+            : <><span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span><span className="font-bold tracking-tight">{brand.name}</span></>}
         </div>
       </header>
 
@@ -60,7 +52,6 @@ export default async function Home() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a href="#create" className="btn-primary px-5 py-3 text-base">Create your situation room →</a>
-          <Link href="/agent/login" className="btn-ghost px-5 py-3 text-base">I'm a field agent</Link>
         </div>
       </section>
 
@@ -73,22 +64,15 @@ export default async function Home() {
         <Onboard />
       </section>
 
-      {/* Sign-in cards for existing rooms */}
-      <section className="mx-auto max-w-6xl px-5 pb-16">
-        <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-muted">Already have a room? Sign in</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          { href: "/agent/login", title: "Field Agent", body: "Send scores, incidents and voice notes from your polling unit. Works offline.", cta: "Open agent app" },
-          { href: "/room", title: "Situation Room", body: "Live tally, scores by unit, incidents, AI analysis and big-screen relay.", cta: "Open dashboard" },
-          { href: "/admin", title: "Admin", body: "Enrol agents, generate codes, manage geography, verify and override results.", cta: "Open admin" },
-        ].map((c) => (
-          <Link key={c.href} href={c.href} className="card p-6 transition hover:-translate-y-0.5 hover:ring-1 hover:ring-accent/40">
-            <div className="text-lg font-semibold">{c.title}</div>
-            <p className="mt-1 text-sm text-muted">{c.body}</p>
-            <div className="mt-4 text-sm font-medium text-accent">{c.cta} →</div>
-          </Link>
-        ))}
-        </div>
+      {/* Admin sign-in for existing tenants. Agents & the situation room are
+          reached only via invites issued by the tenant's admin. */}
+      <section className="mx-auto max-w-md px-5 pb-16">
+        <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-muted">Already run a room?</h2>
+        <Link href="/admin" className="card block p-6 text-center transition hover:-translate-y-0.5 hover:ring-1 hover:ring-accent/40">
+          <div className="text-lg font-semibold">Admin sign-in</div>
+          <p className="mt-1 text-sm text-muted">Enrol agents, generate invite codes, manage geography, verify and override results. Agents and coordinators join through the invites you send them.</p>
+          <div className="mt-4 text-sm font-medium text-accent">Open admin →</div>
+        </Link>
       </section>
 
       {/* Explainer video */}
@@ -181,7 +165,7 @@ export default async function Home() {
               { q: `Who is it for?`, a: `Political parties, campaigns, election-observer groups and CSOs who want their own real-time, verified view of results and incidents from the field.` },
               { q: `How do field agents report?`, a: `Through an offline-first mobile web app (PWA). They sign in with an admin-issued invite code / QR link or a pre-authorised Google account, then send scores, messages, incidents and photos — queued and synced even on poor networks, with GPS.` },
               { q: `Which elections does it support?`, a: `Any Nigerian election — Presidential, Governorship, Senatorial, House of Reps, State Assembly, LG Chairman and Councillor. The polling structure (State → LGA → Ward → Unit) is the same; only the constituency, candidates and win-rule change.` },
-              { q: `Is our data private?`, a: `Yes. Live results, agent reports and analytics are visible only to your signed-in staff inside the situation room. The public assistant answers only about the Electoral Act — never your data.` },
+              { q: `Is our data private?`, a: `Yes. Live results, agent reports and analytics are visible only to your signed-in staff inside the situation room — never exposed publicly.` },
               { q: `What does it cost?`, a: `The first 10 agent seats are free to trial. Extra seats are ₦10,000 each, one-off per election. Use the in-app calculator (units × agents per unit) to size your plan, and pay by Paystack or Squad.` },
               { q: `Can we use our own brand and domain?`, a: `Yes — it's white-label. Set your name, logo, accent colour, candidates and constituency; run it on your own domain. Contact us to set up a tenancy.` },
             ].map((f) => (
@@ -194,18 +178,6 @@ export default async function Home() {
               </details>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* Public Act assistant */}
-      <section className="border-t border-line bg-white/[0.02]">
-        <div className="mx-auto max-w-3xl px-5 py-16">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Ask about the Electoral Act</h2>
-          <p className="mt-2 text-muted">A free assistant trained on Nigeria's Electoral Act — ask about over-voting, primaries, petitions, when campaigns start, how a winner is declared, and more. (Live election data stays private to signed-in staff.)</p>
-          <div className="card mt-6 p-5">
-            <AiChat isPublic intro="Ask a question about the Electoral Act or how this platform works." />
-          </div>
-          <p className="mt-3 text-xs text-muted">Informational only, not legal advice. Verify against the official Act and INEC guidelines.</p>
         </div>
       </section>
 
@@ -239,8 +211,7 @@ export default async function Home() {
               <Link href="/terms" className="hover:text-ink">Terms</Link>
               <Link href="/privacy" className="hover:text-ink">Privacy</Link>
               <a href="#contact" className="hover:text-ink">Contact</a>
-              <Link href="/agent/login" className="hover:text-ink">Agent</Link>
-              <Link href="/room" className="hover:text-ink">Room</Link>
+              <Link href="/admin" className="hover:text-ink">Admin</Link>
             </nav>
           </div>
           <div className="mt-6 border-t border-line pt-6 text-xs text-muted">
