@@ -9,6 +9,8 @@ import { verifySession, type Session } from "./src/lib/auth";
 import { subscribe } from "./src/lib/events";
 import { db } from "./src/lib/db";
 import { setIO, markOnline, markOffline, broadcastPresence, emitDashboard } from "./src/lib/realtime";
+import { reconcilePending } from "./src/lib/billing-credit";
+import { paystackEnabled, squadEnabled } from "./src/lib/payments";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT || 3200);
@@ -100,6 +102,17 @@ app.prepare().then(() => {
   // Bridge the existing in-process event bus (POST routes publish to it) to the
   // dashboard room, so the live wall works over sockets with zero route changes.
   subscribe((evt) => io.to("dashboard").emit("live", evt));
+
+  // Auto-reconcile billing: since a shared merchant's single webhook may live in
+  // another app, verify PENDING payments directly with Paystack/Squad on a timer
+  // so seats are credited without any webhook or manual click.
+  if (paystackEnabled || squadEnabled) {
+    const sweep = () => reconcilePending(40)
+      .then((r) => { if (r.credited) console.log(`> billing reconcile: credited ${r.credited}/${r.checked}`); })
+      .catch(() => {});
+    setInterval(sweep, 3 * 60 * 1000); // every 3 minutes
+    setTimeout(sweep, 30 * 1000);       // once shortly after boot
+  }
 
   server.listen(port, () => console.log(`> Situation Room on http://localhost:${port} (Next + Socket.IO)`));
 });
