@@ -151,7 +151,7 @@ export default async function Home() {
           </div>
           <div className="card p-5">
             <div className="text-sm font-semibold">Winning rules</div>
-            <p className="mt-1 text-sm text-muted"><b>FPTP</b> (most valid votes) for Governor, Senator, Reps, Assembly, Chairman and Councillor. <b>President</b>: most votes <i>and</i> ≥ 25% in two-thirds of the 36 states + FCT, else a run-off.</p>
+            <p className="mt-1 text-sm text-muted"><b>First-Past-The-Post (FPTP)</b> — the most valid votes wins — for Governor, Senator, Reps, Assembly, Chairman and Councillor. <b>President</b>: most votes <i>and</i> ≥ 25% in two-thirds of the 36 states + FCT, else a run-off.</p>
           </div>
         </div>
       </section>
