@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  let body: { state?: string; units?: RawUnit[] };
+  let body: { state?: string; units?: RawUnit[]; replace?: boolean };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
 
   const state = String(body?.state || "").toUpperCase().trim();
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   if (!units.length) return NextResponse.json({ error: "No 'units' array in file" }, { status: 400 });
 
   try {
-    const result = await importUnits(state, units);
+    const result = await importUnits(state, units, !!body.replace);
     return NextResponse.json({ ok: true, result, summary: await warehouseSummary() });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Import failed" }, { status: 500 });

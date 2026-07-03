@@ -872,6 +872,7 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [coverage, setCoverage] = useState<any>(null);
+  const [replaceMode, setReplaceMode] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function checkCoverage() {
@@ -908,7 +909,7 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
         const parts: { state: string; units: any[] }[] = Array.isArray(json.states) ? json.states : [{ state: json.state, units: json.units }];
         for (const p of parts) {
           setBusy(p.state || f.name);
-          const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: p.state, units: p.units }) });
+          const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: p.state, units: p.units, replace: replaceMode }) });
           const j = await r.json();
           if (r.ok) {
             setLog((l) => [`✓ ${j.result.state}: ${j.result.lgas} LGAs · ${j.result.wards} wards · ${j.result.units} units imported (${(j.result.ms / 1000).toFixed(0)}s)`, ...l].slice(0, 80));
@@ -951,19 +952,6 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
     onFlash("National harvest complete");
   }
 
-  async function clearWarehouse() {
-    if (!window.confirm("Wipe ALL warehoused states/LGAs/wards/units and detach every agent from its unit? Do this before a clean national re-import.")) return;
-    setBusy("clear");
-    const r = await api("/api/admin/geo/harvest", { method: "DELETE", body: JSON.stringify({ confirm: "CLEAR" }) });
-    const j = await r.json();
-    setBusy(null);
-    if (r.ok) {
-      setSummary(j.summary);
-      setLog((l) => [`⌦ Warehouse cleared — removed ${j.removed.units} units, ${j.removed.wards} wards, ${j.removed.lgas} LGAs, ${j.removed.states} states`, ...l].slice(0, 60));
-      onFlash("Warehouse cleared");
-    } else onFlash(j.error || "Clear failed");
-  }
-
   return (
     <section className="card p-5">
       <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Polling-unit warehouse</h2>
@@ -975,6 +963,10 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
         <input ref={fileRef} type="file" accept=".json,application/json" multiple disabled={!!busy}
           onChange={(e) => importFiles(e.target.files)}
           className="mt-2 block w-full text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white" />
+        <label className="mt-2 flex items-center gap-2 text-[11px] text-muted">
+          <input type="checkbox" checked={replaceMode} onChange={(e) => setReplaceMode(e.target.checked)} />
+          Full refresh — replace each state&apos;s existing data (use when re-harvesting after INEC updates). Off = add only new units.
+        </label>
         {busy && <div className="mt-2 text-[11px] text-muted">Importing {busy}…</div>}
       </div>
 
@@ -994,7 +986,6 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
           {busy ? `Working ${busy}…` : "Harvest all 37 states"}
         </button>
         <button className="btn-ghost text-xs" disabled={!!busy} onClick={checkCoverage}>Check coverage (37 / 774)</button>
-        <button className="btn-ghost text-xs text-bad" disabled={!!busy} onClick={clearWarehouse}>Clear warehouse</button>
       </div>
 
       {coverage && (
@@ -1004,6 +995,16 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
             {coverage.summary.emptyWards > 0 && <span className="text-warn"> · {coverage.summary.emptyWards} wards with no units</span>}
             {coverage.summary.complete && <span className="text-good"> · ✓ complete</span>}
           </div>
+          {coverage.summary.missingStates?.length > 0 && (
+            <div className="mb-2 rounded-md border border-warn/40 bg-warn/10 px-2 py-1.5 text-warn">
+              <b>Not imported yet ({coverage.summary.missingStates.length}):</b> {coverage.summary.missingStates.join(", ")}
+            </div>
+          )}
+          {coverage.summary.shortStates?.length > 0 && (
+            <div className="mb-2 text-warn">
+              <b>Short on LGAs:</b> {coverage.summary.shortStates.map((x: any) => `${x.state} (${x.have}/${x.expected})`).join(", ")}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
             {coverage.states.map((s: any) => (
               <div key={s.state} className={`flex justify-between tabular ${s.complete ? "text-muted" : "text-warn"}`}>

@@ -80,9 +80,23 @@ export type RawUnit = { id?: string; pu?: string; delim?: string; lga?: string; 
 // Import a state's units from a harvested file (produced by scripts/harvest-inec.mjs).
 // Units arrive as a flat list carrying their lga + ward names + delim; we group and
 // upsert into State/Lga/Ward/PollingUnit exactly like harvestState. Idempotent.
-export async function importUnits(stateName: string, rows: RawUnit[]): Promise<HarvestResult> {
+export async function importUnits(stateName: string, rows: RawUnit[], replace = false): Promise<HarvestResult> {
   const started = Date.now();
   const state = stateName.toUpperCase().trim();
+
+  // Full refresh of one state (for INEC updates): drop its existing units/wards/LGAs
+  // first so removed/renamed rows don't linger. Detaches agent/submission links so
+  // FKs don't block. Without replace, import is additive (skipDuplicates).
+  if (replace) {
+    const existing = await db.state.findFirst({ where: { name: state } });
+    if (existing) {
+      await db.agent.updateMany({ where: { stateId: existing.id }, data: { pollingUnitId: null, wardId: null, lgaId: null, stateId: null } });
+      await db.submission.updateMany({ where: { pollingUnit: { stateId: existing.id } }, data: { pollingUnitId: null } });
+      await db.pollingUnit.deleteMany({ where: { stateId: existing.id } });
+      await db.ward.deleteMany({ where: { lga: { stateId: existing.id } } });
+      await db.lga.deleteMany({ where: { stateId: existing.id } });
+    }
+  }
 
   const byLga = new Map<string, Map<string, RawUnit[]>>();
   for (const u of rows) {
