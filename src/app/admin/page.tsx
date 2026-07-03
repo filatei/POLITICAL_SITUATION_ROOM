@@ -582,15 +582,15 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
 
   async function toggleState(s: GState) {
     setOpenS((o) => ({ ...o, [s.id]: !o[s.id] }));
-    if (!lgasBy[s.id]) { const r = await api(`/api/admin/geo?stateId=${s.id}`); if (r.ok) setLgasBy((m) => ({ ...m, [s.id]: (await r.json()).lgas })); }
+    if (!lgasBy[s.id]) { const r = await api(`/api/admin/geo?stateId=${s.id}`); if (r.ok) { const j = await r.json(); setLgasBy((m) => ({ ...m, [s.id]: j.lgas })); } }
   }
   async function toggleLga(l: GLga) {
     setOpenL((o) => ({ ...o, [l.id]: !o[l.id] }));
-    if (!wardsBy[l.id]) { const r = await api(`/api/admin/geo?lgaId=${l.id}`); if (r.ok) setWardsBy((m) => ({ ...m, [l.id]: (await r.json()).wards })); }
+    if (!wardsBy[l.id]) { const r = await api(`/api/admin/geo?lgaId=${l.id}`); if (r.ok) { const j = await r.json(); setWardsBy((m) => ({ ...m, [l.id]: j.wards })); } }
   }
   async function toggleWard(w: GWard) {
     setOpenW((o) => ({ ...o, [w.id]: !o[w.id] }));
-    if (!unitsBy[w.id]) { const r = await api(`/api/admin/geo?wardId=${w.id}`); if (r.ok) setUnitsBy((m) => ({ ...m, [w.id]: (await r.json()).units })); }
+    if (!unitsBy[w.id]) { const r = await api(`/api/admin/geo?wardId=${w.id}`); if (r.ok) { const j = await r.json(); setUnitsBy((m) => ({ ...m, [w.id]: j.units })); } }
   }
   async function openUnit(u: GUnit) { const r = await api(`/api/admin/geo?unitId=${u.id}`); if (r.ok) setDetail(await r.json()); }
   async function refreshDetail() { if (detail) { const r = await api(`/api/admin/geo?unitId=${detail.unit.id}`); if (r.ok) setDetail(await r.json()); } }
