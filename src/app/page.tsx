@@ -31,13 +31,15 @@ export default async function Home() {
     <main className="min-h-dvh">
       {/* Nav */}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
+        <div className="mx-auto max-w-6xl px-5 py-3">
+          {/* Row 1: logo stands alone. */}
+          <div className="flex items-center">
             {brand.logoUrl
               ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[132px] object-contain" />
               : <><span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span><span className="font-bold tracking-tight">{brand.name}</span></>}
           </div>
-          <div className="flex items-center gap-2 text-sm">
+          {/* Row 2: navigation actions. */}
+          <div className="mt-2.5 flex items-center justify-end gap-2 text-sm">
             <Link href="/agent/login" className="btn-ghost px-3 py-1.5">Field agent</Link>
             <Link href="/room" className="btn-primary px-3 py-1.5">Enter room</Link>
           </div>

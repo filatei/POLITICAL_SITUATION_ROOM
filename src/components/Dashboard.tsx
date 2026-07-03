@@ -196,19 +196,12 @@ export default function Dashboard({ session }: { session: Session }) {
 
   return (
     <div className={big ? "bigscreen min-h-dvh" : "min-h-dvh"}>
-      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-5">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <header className="sticky top-0 z-10 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-5">
+        {/* Row 1: logo stands alone; only the avatar menu shares this row. */}
+        <div className="flex items-center justify-between gap-3">
           {brand.logoUrl
-            ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[120px] shrink-0 object-contain" />
+            ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[130px] shrink-0 object-contain" />
             : <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>}
-          <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{brand.name} · Live</div>
-            <div className="truncate text-base font-bold tracking-tight sm:text-lg">{election?.name || "—"}</div>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 text-sm">
-          {tally && <span className="pill bg-white/5 text-ink">Rep. <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> · {reportPct}%</span>}
-          <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count}</span>
           <div className="relative">
             <button onClick={() => setMenu((m) => !m)} aria-label="Account menu"
               className="grid h-9 w-9 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent ring-1 ring-inset ring-accent/40">{initials}</button>
@@ -242,10 +235,21 @@ export default function Dashboard({ session }: { session: Session }) {
             )}
           </div>
         </div>
+        {/* Row 2: election title + reporting/presence status. */}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{brand.name} · Live</div>
+            <div className="truncate text-base font-bold tracking-tight sm:text-lg">{election?.name || "—"}</div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 text-sm">
+            {tally && <span className="pill bg-white/5 text-ink">Rep. <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> · {reportPct}%</span>}
+            <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count}</span>
+          </div>
+        </div>
       </header>
 
       {!big && (
-        <div className="sticky top-[56px] z-[9] flex gap-1 border-b border-line bg-surface/85 p-2 backdrop-blur-md lg:hidden">
+        <div className="sticky top-[104px] z-[9] flex gap-1 border-b border-line bg-surface/85 p-2 backdrop-blur-md lg:hidden">
           {(["tally", "scores", "activity"] as const).map((t) => (
             <button key={t} onClick={() => setMtab(t)}
               className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${mtab === t ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted"}`}>
