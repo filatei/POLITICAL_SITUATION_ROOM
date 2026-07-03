@@ -54,9 +54,10 @@ function Console({ session }: { session: Session }) {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
   const [bulkLga, setBulkLga] = useState("");
-  const [perUnit, setPerUnit] = useState("6");
+  const [perUnit, setPerUnit] = useState("1");
   const [bulkResult, setBulkResult] = useState<{ name: string; inviteCode: string; unitLabel: string }[] | null>(null);
   const [qr, setQr] = useState<{ code: string; label?: string } | null>(null);
+  const [openAgent, setOpenAgent] = useState<string | null>(null);
   const [agentQ, setAgentQ] = useState("");
   const [agentFilter, setAgentFilter] = useState<"all" | "unused" | "active">("all");
   const [edit, setEdit] = useState<{ id: string; name: string; phone: string } | null>(null);
@@ -201,7 +202,7 @@ function Console({ session }: { session: Session }) {
                 <div className="max-h-52 space-y-1 overflow-y-auto text-xs">
                   {lgaCodes.map((a) => (
                     <button key={a.id} className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-ink/5"
-                      onClick={() => setQr({ code: a.inviteCode, label: `${a.name} · ${a.unitLabel}` })} title="Show QR / copy">
+                      onClick={() => setOpenAgent(a.id)} title="Open code details">
                       <span className="min-w-0">
                         <span className="tabular block font-semibold text-accent">{a.inviteCode}</span>
                         <span className="block truncate text-muted">{a.usedAt ? `Used by ${a.name} · ${a.unit || a.unitLabel}` : `Unused · ${a.unit || a.unitLabel}`}</span>
@@ -267,7 +268,7 @@ function Console({ session }: { session: Session }) {
                   </div>
                 ) : (
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <button className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent hover:bg-accent/15" onClick={() => setQr({ code: a.inviteCode, label: `${a.name} · ${a.unitLabel}` })} title="Show QR / copy">{a.inviteCode} ⧉</button>
+                    <button className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent hover:bg-accent/15" onClick={() => setOpenAgent(a.id)} title="Open code details">{a.inviteCode} ⧉</button>
                     <div className="flex items-center gap-3 text-xs">
                       <button className="text-muted hover:text-ink" onClick={() => setEdit({ id: a.id, name: a.name, phone: a.phone || "" })}>Assign</button>
                       <button className="text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
@@ -282,11 +283,13 @@ function Console({ session }: { session: Session }) {
       </main>
 
       <div className="space-y-4 p-5 pt-0">
+        <GeoConsole onFlash={setFlash} onOpenAgent={(id) => setOpenAgent(id)} />
         <TallyOverride units={units} onFlash={setFlash} />
         {session.role === "ADMIN" && <StaffUsers onFlash={setFlash} />}
       </div>
 
       {qr && <QrModal code={qr.code} label={qr.label} onClose={() => setQr(null)} onCopy={copyText} />}
+      {openAgent && <AgentDetailModal id={openAgent} onClose={() => { setOpenAgent(null); load(); }} onFlash={setFlash} onQr={(code, label) => setQr({ code, label })} onCopy={copyText} />}
     </div>
   );
 }
@@ -487,5 +490,254 @@ function StaffUsers({ onFlash }: { onFlash: (s: string) => void }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/* -------- Geography drill-down: LGA → Ward → Unit -------- */
+type GLga = { id: string; name: string; wards: number; units: number; codes: number };
+type GWard = { id: string; name: string; code: string; units: number; codes: number };
+type GUnit = { id: string; name: string; code: string; codes: number; used: number; active: number; reports: number };
+type GUnitDetail = {
+  unit: { id: string; name: string; label: string; ward: string; lga: string; registeredVoters: number };
+  codes: { id: string; name: string; inviteCode: string; status: string; email?: string | null; phone?: string | null; usedAt?: string | null; lastSeenAt?: string | null }[];
+  submissions: { id: string; type: string; text?: string; severity?: string; confidence?: string; scoreStatus?: string; receivedAt: string; scores: { party: string; color: string; votes: number }[]; media: { url: string; thumbUrl?: string; mime: string; kind: string }[] }[];
+};
+
+function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; onOpenAgent: (id: string) => void }) {
+  const [lgas, setLgas] = useState<GLga[]>([]);
+  const [lga, setLga] = useState<GLga | null>(null);
+  const [wards, setWards] = useState<GWard[]>([]);
+  const [ward, setWard] = useState<GWard | null>(null);
+  const [units, setUnits] = useState<GUnit[]>([]);
+  const [detail, setDetail] = useState<GUnitDetail | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { api("/api/admin/geo").then(async (r) => r.ok && setLgas((await r.json()).lgas)); }, []);
+
+  async function openLga(l: GLga) { setLga(l); setWard(null); setDetail(null); setUnits([]); const r = await api(`/api/admin/geo?lgaId=${l.id}`); if (r.ok) setWards((await r.json()).wards); }
+  async function openWard(w: GWard) { setWard(w); setDetail(null); const r = await api(`/api/admin/geo?wardId=${w.id}`); if (r.ok) setUnits((await r.json()).units); }
+  async function openUnit(u: GUnit) { const r = await api(`/api/admin/geo?unitId=${u.id}`); if (r.ok) setDetail(await r.json()); }
+  async function refreshDetail() { if (detail) { const r = await api(`/api/admin/geo?unitId=${detail.unit.id}`); if (r.ok) setDetail(await r.json()); } }
+
+  async function genForUnit() {
+    if (!detail) return;
+    setBusy(true);
+    const r = await api("/api/admin/agents", { method: "POST", body: JSON.stringify({ name: `${detail.unit.name} · Agent`, pollingUnitId: detail.unit.id }) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { onFlash(`New code ${j.agent.inviteCode}`); refreshDetail(); } else onFlash(j.error || "Failed");
+  }
+
+  const fmt = (s?: string | null) => (s ? new Date(s).toLocaleString() : "");
+  const typeColor: Record<string, string> = { INCIDENT: "bg-bad/10 text-bad", SCORE: "bg-accent/10 text-accent", MESSAGE: "bg-ink/10 text-ink", STATUS: "bg-ink/10 text-muted" };
+
+  return (
+    <section className="card p-5">
+      <div className="mb-3 flex items-center gap-1.5 text-xs">
+        <button className={`font-semibold ${lga ? "text-accent hover:underline" : "text-ink"}`} onClick={() => { setLga(null); setWard(null); setDetail(null); }}>All LGAs</button>
+        {lga && <><span className="text-muted">/</span><button className={`font-semibold ${ward ? "text-accent hover:underline" : "text-ink"}`} onClick={() => { setWard(null); setDetail(null); }}>{lga.name}</button></>}
+        {ward && <><span className="text-muted">/</span><button className={`font-semibold ${detail ? "text-accent hover:underline" : "text-ink"}`} onClick={() => setDetail(null)}>{ward.name}</button></>}
+        {detail && <><span className="text-muted">/</span><span className="font-semibold text-ink">{detail.unit.name}</span></>}
+      </div>
+
+      {/* Unit detail */}
+      {detail ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-bold">{detail.unit.label}</h3>
+              <button className="btn-primary px-3 py-1.5 text-xs" disabled={busy} onClick={genForUnit}>{busy ? "…" : "+ Code"}</button>
+            </div>
+            <p className="mb-2 text-[11px] text-muted">Registered voters: {detail.unit.registeredVoters.toLocaleString()} · {detail.codes.length} code{detail.codes.length === 1 ? "" : "s"}</p>
+            <div className="space-y-1.5">
+              {detail.codes.map((c) => (
+                <button key={c.id} onClick={() => onOpenAgent(c.id)} className="flex w-full items-center justify-between gap-2 rounded-lg border border-line p-2 text-left hover:bg-ink/5">
+                  <span className="min-w-0">
+                    <span className="tabular block font-semibold text-accent">{c.inviteCode}</span>
+                    <span className="block truncate text-[11px] text-muted">{c.name}{c.lastSeenAt ? ` · seen ${fmt(c.lastSeenAt)}` : ""}</span>
+                  </span>
+                  <span className={`pill shrink-0 ${c.status === "ACTIVE" ? "bg-good/15 text-good" : c.usedAt ? "bg-warn/15 text-warn" : "bg-ink/5 text-muted"}`}>{c.status === "ACTIVE" ? "active" : c.usedAt ? "used" : "free"}</span>
+                </button>
+              ))}
+              {!detail.codes.length && <p className="text-xs text-muted">No codes for this unit yet.</p>}
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Reports here ({detail.submissions.length})</h3>
+            <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+              {detail.submissions.map((it) => (
+                <div key={it.id} className={`rounded-lg border p-2.5 ${it.type === "INCIDENT" ? "border-bad/40 bg-bad/[0.04]" : "border-line"}`}>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className={`pill ${typeColor[it.type] || "bg-ink/10"}`}>{it.type}</span>
+                    <span className="text-muted">{fmt(it.receivedAt)}</span>
+                  </div>
+                  {it.text && <div className="mt-1 text-sm">{it.text}</div>}
+                  {!!it.scores.filter((s) => s.votes > 0).length && (
+                    <div className="mt-1.5 flex flex-wrap gap-1 text-xs">
+                      {it.scores.filter((s) => s.votes > 0).sort((a, b) => b.votes - a.votes).map((s, i) => (
+                        <span key={i} className="rounded bg-white/5 px-1.5 py-0.5"><b>{s.party}</b> {s.votes.toLocaleString()}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {!detail.submissions.length && <p className="text-xs text-muted">No reports from this unit yet.</p>}
+            </div>
+          </div>
+        </div>
+      ) : units.length || ward ? (
+        <>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Units in {ward?.name}</h3>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {units.map((u) => (
+              <button key={u.id} onClick={() => openUnit(u)} className="rounded-lg border border-line p-3 text-left hover:bg-ink/5">
+                <div className="truncate text-sm font-semibold">{u.name}</div>
+                <div className="mt-1 flex flex-wrap gap-1 text-[11px] text-muted">
+                  <span className="pill bg-ink/10">{u.codes} code{u.codes === 1 ? "" : "s"}</span>
+                  {u.active > 0 && <span className="pill bg-good/15 text-good">{u.active} active</span>}
+                  <span className="pill bg-ink/10">{u.reports} report{u.reports === 1 ? "" : "s"}</span>
+                </div>
+              </button>
+            ))}
+            {!units.length && <p className="text-xs text-muted">No units in this ward.</p>}
+          </div>
+        </>
+      ) : lga ? (
+        <>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Wards in {lga.name}</h3>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {wards.map((w) => (
+              <button key={w.id} onClick={() => openWard(w)} className="rounded-lg border border-line p-3 text-left hover:bg-ink/5">
+                <div className="truncate text-sm font-semibold">{w.name}</div>
+                <div className="mt-1 flex gap-1 text-[11px] text-muted">
+                  <span className="pill bg-ink/10">{w.units} unit{w.units === 1 ? "" : "s"}</span>
+                  <span className="pill bg-ink/10">{w.codes} code{w.codes === 1 ? "" : "s"}</span>
+                </div>
+              </button>
+            ))}
+            {!wards.length && <p className="text-xs text-muted">No wards.</p>}
+          </div>
+        </>
+      ) : (
+        <>
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Geography — drill down to administer units</h2>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {lgas.map((l) => (
+              <button key={l.id} onClick={() => openLga(l)} className="rounded-lg border border-line p-3 text-left hover:bg-ink/5">
+                <div className="truncate text-sm font-semibold">{l.name}</div>
+                <div className="mt-1 flex flex-wrap gap-1 text-[11px] text-muted">
+                  <span className="pill bg-ink/10">{l.wards} wards</span>
+                  <span className="pill bg-ink/10">{l.units} units</span>
+                  <span className="pill bg-ink/10">{l.codes} codes</span>
+                </div>
+              </button>
+            ))}
+            {!lgas.length && <p className="text-xs text-muted">Loading…</p>}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/* -------- Agent / code detail: activity + coordinates -------- */
+type ActSub = { id: string; type: string; text?: string; severity?: string; confidence?: string; scoreStatus?: string; receivedAt: string; capturedAt?: string; lat?: number | null; lng?: number | null; scores: { party: string; color: string; votes: number }[]; media: { url: string; thumbUrl?: string; mime: string; kind: string }[] };
+
+function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; onClose: () => void; onFlash: (s: string) => void; onQr: (code: string, label?: string) => void; onCopy: (t: string) => void }) {
+  const [data, setData] = useState<{ agent: any; counts: any; submissions: ActSub[] } | null>(null);
+  const [edit, setEdit] = useState<{ name: string; phone: string } | null>(null);
+
+  async function load() { const r = await api(`/api/admin/agents/${id}/activity`); if (r.ok) setData(await r.json()); }
+  useEffect(() => { load(); }, [id]); // eslint-disable-line
+
+  async function saveRecipient() {
+    if (!edit) return;
+    const r = await api("/api/admin/agents", { method: "PATCH", body: JSON.stringify({ id, name: edit.name, phone: edit.phone }) });
+    if (r.ok) { onFlash("Recipient saved"); setEdit(null); load(); } else onFlash("Failed");
+  }
+
+  const a = data?.agent;
+  const fmt = (s?: string) => (s ? new Date(s).toLocaleString() : "");
+  const typeColor: Record<string, string> = { INCIDENT: "bg-bad/10 text-bad", SCORE: "bg-accent/10 text-accent", MESSAGE: "bg-ink/10 text-ink", STATUS: "bg-ink/10 text-muted" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4" onClick={onClose}>
+      <div className="sheet-in card my-6 w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="tabular text-lg font-extrabold text-accent">{a?.inviteCode || "…"}</div>
+            <div className="truncate text-sm font-semibold">{a?.name}</div>
+            <div className="truncate text-xs text-muted">{a?.unitLabel}</div>
+          </div>
+          <button className="text-muted hover:text-ink" onClick={onClose}>✕</button>
+        </div>
+
+        {a && (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className={`pill ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.usedAt ? "bg-warn/15 text-warn" : "bg-ink/5 text-muted"}`}>{a.status}</span>
+              {a.email && <span className="pill bg-accent/10 text-accent">🔑 {a.email}</span>}
+              {a.phone && <span className="pill bg-ink/10 text-muted">📞 {a.phone}</span>}
+              {a.lastSeenAt && <span className="pill bg-ink/10 text-muted">seen {fmt(a.lastSeenAt)}</span>}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="btn-ghost text-xs" onClick={() => onCopy(a.inviteCode)}>Copy code</button>
+              <button className="btn-ghost text-xs" onClick={() => onQr(a.inviteCode, `${a.name} · ${a.unitLabel}`)}>Show QR</button>
+              <button className="btn-ghost text-xs" onClick={() => onCopy(`${window.location.origin}/agent/login?code=${a.inviteCode}`)}>Copy login link</button>
+              <button className="btn-ghost text-xs" onClick={() => setEdit({ name: a.name, phone: a.phone || "" })}>Assign recipient</button>
+            </div>
+            {edit && (
+              <div className="mt-2 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-2">
+                <input className="input py-1 text-sm" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Recipient name" />
+                <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputMode="tel" placeholder="Recipient phone" />
+                <div className="flex gap-2"><button className="btn-primary flex-1 py-1.5 text-sm" onClick={saveRecipient}>Save</button><button className="btn-ghost py-1.5 text-sm" onClick={() => setEdit(null)}>Cancel</button></div>
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3 text-center">
+              <div><div className="tabular text-lg font-bold">{data!.counts.scores}</div><div className="text-[11px] uppercase text-muted">Scores</div></div>
+              <div><div className="tabular text-lg font-bold">{data!.counts.messages}</div><div className="text-[11px] uppercase text-muted">Messages</div></div>
+              <div><div className="tabular text-lg font-bold text-bad">{data!.counts.incidents}</div><div className="text-[11px] uppercase text-muted">Incidents</div></div>
+            </div>
+
+            <h3 className="mb-2 mt-4 text-xs font-bold uppercase tracking-wider text-muted">Everything this agent sent</h3>
+            <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+              {data!.submissions.map((it) => (
+                <div key={it.id} className={`rounded-lg border p-3 ${it.type === "INCIDENT" ? "border-bad/40 bg-bad/[0.04]" : "border-line"}`}>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className={`pill ${typeColor[it.type] || "bg-ink/10"}`}>{it.type}{it.confidence ? ` · ${it.confidence}` : ""}</span>
+                    <span className="text-muted">{fmt(it.receivedAt)}</span>
+                  </div>
+                  {it.text && <div className="mt-1 text-sm">{it.text}</div>}
+                  {it.severity && <span className="pill mt-1 bg-warn/15 text-warn">{it.severity}</span>}
+                  {!!it.scores.filter((s) => s.votes > 0).length && (
+                    <div className="mt-1.5 flex flex-wrap gap-1 text-xs">
+                      {it.scores.filter((s) => s.votes > 0).sort((x, y) => y.votes - x.votes).map((s, i) => (
+                        <span key={i} className="rounded bg-white/5 px-1.5 py-0.5"><b style={{ color: s.color }}>{s.party}</b> {s.votes.toLocaleString()}</span>
+                      ))}
+                    </div>
+                  )}
+                  {!!it.media.length && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {it.media.map((m, i) => m.mime.startsWith("video/")
+                        ? <video key={i} src={m.url} controls className="h-20 rounded border border-line" />
+                        : m.mime.startsWith("audio/")
+                          ? <audio key={i} src={m.url} controls className="w-full" />
+                          : <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.thumbUrl || m.url} className="h-20 rounded border border-line object-cover" alt={m.kind} /></a>)}
+                    </div>
+                  )}
+                  {it.lat != null && it.lng != null ? (
+                    <a href={`https://www.google.com/maps?q=${it.lat},${it.lng}`} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[11px] text-accent hover:underline">
+                      📍 {it.lat.toFixed(5)}, {it.lng.toFixed(5)} — open in Maps
+                    </a>
+                  ) : <div className="mt-2 text-[11px] text-muted">📍 No coordinates captured</div>}
+                </div>
+              ))}
+              {!data!.submissions.length && <p className="text-sm text-muted">This code hasn&apos;t sent anything yet.</p>}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
