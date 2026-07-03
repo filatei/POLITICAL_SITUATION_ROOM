@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
       orderBy: { receivedAt: "desc" }, take: 80,
       include: { agent: true, pollingUnit: { include: { ward: true, lga: true } }, scores: { include: { candidate: { include: { party: true } } } } },
     }),
-    db.election.findFirst({ orderBy: { createdAt: "desc" } }),
+    scopedElection(),
   ]);
   const dataCtx = [
     election ? `ELECTION: ${election.name} (${election.type})` : "",

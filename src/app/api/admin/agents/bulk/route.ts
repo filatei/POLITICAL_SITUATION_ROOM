@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (!lgaId) return NextResponse.json({ error: "lgaId required." }, { status: 400 });
   const n = Math.min(Math.max(Number(perUnit) || 1, 1), 10); // 1..10 codes per unit
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   const units = await db.pollingUnit.findMany({

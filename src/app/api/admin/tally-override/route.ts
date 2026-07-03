@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN", "COORDINATOR"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   const candidates = await db.candidate.findMany({ where: { electionId: election.id }, include: { party: true } });
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const b = parsed.data;
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   const unit = await db.pollingUnit.findUnique({ where: { id: b.pollingUnitId } });

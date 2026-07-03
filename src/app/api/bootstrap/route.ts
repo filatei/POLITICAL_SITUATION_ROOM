@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   const s = await getSession(req);
   if (!s) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election configured." }, { status: 404 });
 
   const candidates = await db.candidate.findMany({

@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
@@ -8,7 +9,7 @@ export const runtime = "nodejs";
 
 // Current seat balance for the election. Creates the subscription (10 free) lazily.
 export async function getSeatStatus() {
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return null;
   let sub = await db.subscription.findUnique({ where: { electionId: election.id } });
   if (!sub) sub = await db.subscription.create({ data: { electionId: election.id } });

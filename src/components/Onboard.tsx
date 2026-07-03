@@ -14,6 +14,38 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 }
 
+async function copyToClipboard(text: string) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try { const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); return true; }
+    catch { return false; }
+  }
+}
+
+async function shareLinks(text: string) {
+  if (typeof navigator !== "undefined" && (navigator as any).share) {
+    try { await (navigator as any).share({ title: "PSR situation room", text }); return; } catch { /* user cancelled — fall through to copy */ }
+  }
+  if (await copyToClipboard(text)) alert("Links copied — paste them into WhatsApp, email or SMS.");
+}
+
+// One shareable link with a copy button.
+function LinkRow({ label, url }: { label: string; url: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    if (await copyToClipboard(url)) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
+  }
+  return (
+    <div className="rounded-lg border border-line bg-white/[0.03] p-2.5">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</div>
+      <div className="mt-1 flex items-center gap-2">
+        <a href={url} className="min-w-0 flex-1 truncate text-sm text-accent hover:underline" title={url}>{url}</a>
+        <button onClick={copy} className="btn-ghost shrink-0 px-2.5 py-1 text-xs">{copied ? "Copied ✓" : "Copy"}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Onboard() {
   const [name, setName] = useState("");
   const [type, setType] = useState("GOVERNORSHIP");
@@ -43,17 +75,26 @@ export default function Onboard() {
 
   if (done) {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const roomUrl = origin + done.roomPath;
+    const adminUrl = origin + done.adminPath;
+    const shareText = `PSR situation room "${done.name}" is live.\n\nSituation room: ${roomUrl}\nAdmin console: ${adminUrl}`;
     return (
-      <div className="card p-6 text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-good/15 text-3xl text-good">✓</div>
-        <div className="mt-3 text-lg font-bold">Your situation room is created</div>
-        <p className="mt-1 text-sm text-muted"><b className="text-ink">{done.name}</b> — tenant <span className="tabular text-accent">{done.slug}</span></p>
-        <div className="mt-4 space-y-1 rounded-lg border border-line bg-white/[0.03] p-3 text-left text-sm">
-          <div className="text-muted">Room: <span className="tabular text-ink">{origin}{done.roomPath}</span></div>
-          <div className="text-muted">Admin: <span className="tabular text-ink">{origin}{done.adminPath}</span></div>
+      <div className="card p-6">
+        <div className="text-center">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-good/15 text-3xl text-good">✓</div>
+          <div className="mt-3 text-lg font-bold">Your situation room is created</div>
+          <p className="mt-1 text-sm text-muted"><b className="text-ink">{done.name}</b> — tenant <span className="tabular text-accent">{done.slug}</span></p>
         </div>
-        <p className="mt-3 text-xs text-muted">You have 10 free agent seats to start. Sign in to your admin with the email you provided to add candidates, generate agent codes and buy more seats.</p>
-        <a href={done.adminPath} className="btn-primary mt-4 inline-block">Go to my admin →</a>
+        <div className="mt-5 space-y-2">
+          <LinkRow label="Situation room" url={roomUrl} />
+          <LinkRow label="Admin console" url={adminUrl} />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <a href={done.adminPath} className="btn-primary">Go to my admin →</a>
+          <button className="btn-ghost" onClick={() => shareLinks(shareText)}>Share links</button>
+          <a className="btn-ghost" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}>WhatsApp</a>
+        </div>
+        <p className="mt-3 text-xs text-muted">You have 10 free agent seats to start. Sign in to your admin with the email you provided to add candidates, generate agent codes and buy more seats. Keep the admin link private.</p>
       </div>
     );
   }

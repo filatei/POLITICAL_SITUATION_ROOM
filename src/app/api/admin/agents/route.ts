@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (cleanEmail && await db.agent.findUnique({ where: { email: cleanEmail } }))
     return NextResponse.json({ error: "That Google email is already enrolled for another agent." }, { status: 409 });
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   // Seat cap: you can browse every unit, but only create as many codes as you have seats.

@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   const existing = await db.submission.findUnique({ where: { clientUid: b.clientUid } });
   if (existing) return NextResponse.json({ ok: true, id: existing.id, deduped: true });
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   // Agents can only file for their own unit.

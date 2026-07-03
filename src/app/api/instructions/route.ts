@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   const { target = "AGENT", targetId, title, body, severity = "INFO" } = await req.json();
   if (!body) return NextResponse.json({ error: "Message body required." }, { status: 400 });
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   const agentIds = await targetAgentIds(target, targetId, election.id);

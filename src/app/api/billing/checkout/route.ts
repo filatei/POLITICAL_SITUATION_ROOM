@@ -1,3 +1,4 @@
+import { scopedElection } from "@/lib/election-scope";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (provider === "PAYSTACK" && !paystackEnabled) return NextResponse.json({ error: "Paystack not configured (set PAYSTACK_SECRET_KEY)." }, { status: 400 });
   if (provider === "SQUAD" && !squadEnabled) return NextResponse.json({ error: "Squad not configured (set SQUAD_SECRET_KEY)." }, { status: 400 });
 
-  const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
+  const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   const { kobo } = costForSeats(n);
