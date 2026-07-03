@@ -2,21 +2,28 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import SWRegister from "@/components/SWRegister";
 import InstallPrompt from "@/components/InstallPrompt";
+import { BrandProvider } from "@/components/BrandProvider";
+import { getBrand } from "@/lib/brand";
 
-export const metadata: Metadata = {
-  title: "Situation Room",
-  description: "Real-time election monitoring and situation room",
-  manifest: "/manifest.webmanifest",
-  applicationName: "Situation Room",
-  appleWebApp: { capable: true, title: "Situation Room", statusBarStyle: "black-translucent" },
-  icons: {
-    icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-    ],
-    apple: [{ url: "/icon-180.png", sizes: "180x180" }],
-  },
-};
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const b = await getBrand();
+  return {
+    title: b.name,
+    description: b.tagline,
+    manifest: "/manifest.webmanifest",
+    applicationName: b.name,
+    appleWebApp: { capable: true, title: b.name, statusBarStyle: "black-translucent" },
+    icons: {
+      icon: [
+        { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icon.svg", type: "image/svg+xml" },
+      ],
+      apple: [{ url: "/icon-180.png", sizes: "180x180" }],
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#08080b",
@@ -25,12 +32,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const b = await getBrand();
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* White-label accent: override the --accent CSS variable per tenant. */}
+        <style dangerouslySetInnerHTML={{ __html: `:root{--accent:${b.accentRgb}} html.light{--accent:${b.accentRgb}}` }} />
+      </head>
       <body className="font-sans antialiased">
         <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.psr_theme==='light')document.documentElement.classList.add('light')}catch(e){}" }} />
-        {children}
+        <BrandProvider brand={{ name: b.name, tagline: b.tagline, logoUrl: b.logoUrl }}>
+          {children}
+        </BrandProvider>
         <SWRegister />
         <InstallPrompt />
       </body>

@@ -302,6 +302,16 @@ model AuditLog {
   @@index([entity, entityId])
 }
 
+// White-label branding (single row per deployment/tenant).
+model Branding {
+  id         String   @id @default("default")
+  name       String   @default("Situation Room")
+  tagline    String   @default("Real-time election monitoring")
+  accent     String   @default("#5b8cff")
+  logoUrl    String?
+  updatedAt  DateTime @updatedAt
+}
+
 enum PaymentProvider {
   PAYSTACK
   SQUAD

@@ -4,6 +4,7 @@ import { api, logout } from "@/lib/session";
 import { getSocket } from "@/lib/socket";
 import PartyBadge from "@/components/PartyBadge";
 import AiChat from "@/components/AiChat";
+import { useBrand } from "@/components/BrandProvider";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import type { Session } from "@/lib/auth";
 
@@ -43,6 +44,7 @@ function sourceLabel(author?: string, unitLabel?: string): string {
 const nf = new Intl.NumberFormat();
 
 export default function Dashboard({ session }: { session: Session }) {
+  const brand = useBrand();
   const [election, setElection] = useState<any>(null);
   const [feed, setFeed] = useState<Item[]>([]);
   const [tally, setTally] = useState<Tally | null>(null);
@@ -196,9 +198,11 @@ export default function Dashboard({ session }: { session: Session }) {
     <div className={big ? "bigscreen min-h-dvh" : "min-h-dvh"}>
       <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>
+          {brand.logoUrl
+            ? <img src={brand.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded object-contain" />
+            : <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>}
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Situation Room · Live</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{brand.name} · Live</div>
             <div className="truncate text-base font-bold tracking-tight sm:text-lg">{election?.name || "—"}</div>
           </div>
         </div>

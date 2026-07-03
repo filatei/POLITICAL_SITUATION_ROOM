@@ -294,6 +294,7 @@ function Console({ session }: { session: Session }) {
           {session.role === "ADMIN" && <KnowledgeCard onFlash={setFlash} />}
         </div>
         {session.role === "ADMIN" && <BillingCard onFlash={setFlash} />}
+        {session.role === "ADMIN" && <BrandingCard onFlash={setFlash} />}
         <TallyOverride units={units} onFlash={setFlash} />
         {session.role === "ADMIN" && <StaffUsers onFlash={setFlash} />}
       </div>
@@ -903,6 +904,53 @@ function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
           </div>
           {st && !st.providers.paystack && !st.providers.squad && <p className="mt-2 text-[11px] text-warn">No payment provider configured yet (set PAYSTACK_SECRET_KEY and/or SQUAD_SECRET_KEY).</p>}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------- White-label branding editor -------- */
+function BrandingCard({ onFlash }: { onFlash: (s: string) => void }) {
+  const [name, setName] = useState("");
+  const [tagline, setTagline] = useState("");
+  const [accent, setAccent] = useState("#5b8cff");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const r = await api("/api/admin/branding");
+    if (r.ok) { const b = await r.json(); setName(b.name || ""); setTagline(b.tagline || ""); setAccent(b.accent || "#5b8cff"); setLogoUrl(b.logoUrl || ""); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    setBusy(true);
+    const r = await api("/api/admin/branding", { method: "PATCH", body: JSON.stringify({ name, tagline, accent, logoUrl }) });
+    setBusy(false);
+    if (r.ok) { onFlash("Branding saved — reloading to apply"); setTimeout(() => location.reload(), 700); }
+    else onFlash("Failed");
+  }
+
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">White-label branding</h2>
+      <p className="mb-3 text-[11px] text-muted">Reskin this deployment — the name, tagline, accent colour and logo apply across the landing page, room, agent app and titles.</p>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div><label className="label">Brand name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Situation Room" /></div>
+        <div><label className="label">Tagline</label><input className="input" value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Real-time election monitoring" /></div>
+        <div>
+          <label className="label">Accent colour</label>
+          <div className="flex items-center gap-2">
+            <input type="color" className="h-10 w-12 cursor-pointer rounded border border-line bg-surface" value={/^#[0-9a-fA-F]{6}$/.test(accent) ? accent : "#5b8cff"} onChange={(e) => setAccent(e.target.value)} />
+            <input className="input tabular" value={accent} onChange={(e) => setAccent(e.target.value)} placeholder="#5b8cff" />
+          </div>
+        </div>
+        <div><label className="label">Logo URL (optional)</label><input className="input" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png" /></div>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <button className="btn-primary" disabled={busy} onClick={save}>{busy ? "Saving…" : "Save branding"}</button>
+        {logoUrl && <img src={logoUrl} alt="preview" className="h-9 w-9 rounded object-contain ring-1 ring-line" />}
+        <span className="rounded px-2 py-1 text-xs font-semibold text-white" style={{ background: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : "#5b8cff" }}>Accent preview</span>
       </div>
     </section>
   );

@@ -370,7 +370,7 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
       <div className="space-y-2">
         {cands.map((c) => (
           <div key={c.id} className="flex items-center gap-2.5">
-            <PartyBadge code={c.party} color={c.color} size={30} />
+            <PartyBadge code={c.party} color={c.color} size={40} />
             <div className="min-w-0 flex-1 leading-tight">
               <div className="text-sm font-bold">{c.party}</div>
               <div className="truncate text-xs text-muted">{c.name}</div>

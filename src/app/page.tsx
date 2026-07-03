@@ -1,6 +1,8 @@
 import Link from "next/link";
 import AiChat from "@/components/AiChat";
+import { getBrand } from "@/lib/brand";
 
+export const dynamic = "force-dynamic";
 const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "";
 
 const STRUCTURE = [
@@ -21,15 +23,18 @@ const FEATURES = [
   { icon: "🤖", title: "AI assistant", body: "Ask about the Electoral Act, how the app works, or live anomalies in the incoming data — grounded, not guessed." },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const brand = await getBrand();
   return (
     <main className="min-h-dvh">
       {/* Nav */}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-2.5">
-            <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>
-            <span className="font-bold tracking-tight">Situation Room</span>
+            {brand.logoUrl
+              ? <img src={brand.logoUrl} alt="" className="h-7 w-7 rounded object-contain" />
+              : <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>}
+            <span className="font-bold tracking-tight">{brand.name}</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Link href="/agent/login" className="btn-ghost px-3 py-1.5">Field agent</Link>
@@ -166,7 +171,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-line">
         <div className="mx-auto max-w-6xl px-5 py-8 text-xs text-muted">
-          <p><b className="text-ink">Situation Room</b> — a parallel, independent citizen/party election monitor. It is <b>not</b> the official INEC result. Figures shown are field reports pending verification.</p>
+          <p><b className="text-ink">{brand.name}</b> — a parallel, independent citizen/party election monitor. It is <b>not</b> the official INEC result. Figures shown are field reports pending verification.</p>
           <p className="mt-2">Staff sign in inside the dashboard. Agents use an invite code / QR link or a pre-authorised Google account.</p>
         </div>
       </footer>
