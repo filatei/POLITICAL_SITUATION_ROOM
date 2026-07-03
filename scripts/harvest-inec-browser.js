@@ -86,6 +86,7 @@
     const units = [];
     let wards = 0;
     const failed = [];
+    const structure = []; // full LGA + ward-name backbone from lgaView/wardView (reliable)
     const push = (us, lga, ward) => {
       for (const u of us) {
         units.push({
@@ -99,9 +100,11 @@
     };
     for (const lga of lgas) {
       let wl = [];
-      // If an LGA's ward list itself is unreachable, skip the whole LGA and move on.
+      // If an LGA's ward list itself is unreachable, still record the LGA (empty)
+      // so it's never dropped, then move on.
       try { wl = await getWards(state, lga); }
-      catch (e) { console.warn(`   ⤼ ${state}: ward list unreachable for LGA "${lga}" — skipping LGA, continuing`); failed.push([lga, "(ward-list)"]); continue; }
+      catch (e) { console.warn(`   ⤼ ${state}: ward list unreachable for LGA "${lga}" — recording empty LGA, continuing`); failed.push([lga, "(ward-list)"]); structure.push({ lga, wards: [] }); continue; }
+      structure.push({ lga, wards: wl });
       wards += wl.length;
       // A flaky ward must NOT abort the LGA or state — collect & retry once at the end.
       await pool(wl, 3, async (ward) => {
@@ -121,7 +124,7 @@
       }
       if (gaps.length) console.warn(`   ⤼ ${state}: ${gaps.length} ward(s) still unreachable (likely an INEC-side gap) — skipped & recorded in payload.gaps. Re-run later to retry.`);
     }
-    const payload = { state, harvestedAt: new Date().toISOString(), lgas: lgas.length, wards, count: units.length, gaps, units };
+    const payload = { state, harvestedAt: new Date().toISOString(), lgas: lgas.length, wards, count: units.length, gaps, structure, units };
     console.log(`✓ ${state}: ${lgas.length} LGAs · ${wards} wards · ${units.length} units${gaps.length ? ` · ${gaps.length} gap ward(s)` : ""} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     return payload;
   }

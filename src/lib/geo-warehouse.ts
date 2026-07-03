@@ -80,7 +80,9 @@ export type RawUnit = { id?: string; pu?: string; delim?: string; lga?: string; 
 // Import a state's units from a harvested file (produced by scripts/harvest-inec.mjs).
 // Units arrive as a flat list carrying their lga + ward names + delim; we group and
 // upsert into State/Lga/Ward/PollingUnit exactly like harvestState. Idempotent.
-export async function importUnits(stateName: string, rows: RawUnit[], replace = false): Promise<HarvestResult> {
+export type LgaStructure = { lga: string; wards?: string[] };
+
+export async function importUnits(stateName: string, rows: RawUnit[], replace = false, structure?: LgaStructure[]): Promise<HarvestResult> {
   const started = Date.now();
   const state = stateName.toUpperCase().trim();
 
@@ -110,12 +112,14 @@ export async function importUnits(stateName: string, rows: RawUnit[], replace = 
   }
 
   let stateId: string | null = null;
+  let stateCode: string | null = null;
   let wardCount = 0;
   let unitCount = 0;
   const ensureState = async (code: string) => {
     if (stateId) return stateId;
     const s = await db.state.upsert({ where: { code }, update: { name: state }, create: { code, name: state } });
     stateId = s.id;
+    stateCode = s.code;
     return stateId;
   };
 
@@ -155,14 +159,49 @@ export async function importUnits(stateName: string, rows: RawUnit[], replace = 
     }
   }
 
-  // Back up the raw file server-side so the warehouse can be rebuilt without re-upload.
+  // Backbone pass: create every LGA (and ward) from the harvested lgaView/wardView
+  // lists — even those with NO reachable units (e.g. Borno/Abadam) — so an LGA is
+  // never dropped just because INEC couldn't serve its polling units.
+  if (structure && structure.length) {
+    const sCode = stateCode || slug(state);
+    const stId = await ensureState(sCode);
+    const existingLgas = await db.lga.findMany({ where: { stateId: stId }, select: { id: true, name: true, code: true } });
+    const lgaByName = new Map(existingLgas.map((l) => [l.name.toUpperCase(), l]));
+    for (const ent of structure) {
+      const lgaName = String(ent.lga || "").trim();
+      if (!lgaName) continue;
+      let lgaRow = lgaByName.get(lgaName.toUpperCase());
+      if (!lgaRow) {
+        const lCode = `${sCode}-${slug(lgaName)}`;
+        const created = await db.lga.upsert({ where: { stateId_code: { stateId: stId, code: lCode } }, update: { name: lgaName }, create: { stateId: stId, code: lCode, name: lgaName } });
+        lgaRow = { id: created.id, name: created.name, code: created.code };
+        lgaByName.set(lgaName.toUpperCase(), lgaRow);
+      }
+      const wardNames = Array.isArray(ent.wards) ? ent.wards : [];
+      if (!wardNames.length) continue;
+      const existingWards = await db.ward.findMany({ where: { lgaId: lgaRow.id }, select: { name: true } });
+      const haveWard = new Set(existingWards.map((w) => w.name.toUpperCase()));
+      for (const wn of wardNames) {
+        const w = String(wn || "").trim();
+        if (!w || haveWard.has(w.toUpperCase())) continue;
+        const wCode = `${lgaRow.code}-${slug(w)}`;
+        await db.ward.upsert({ where: { lgaId_code: { lgaId: lgaRow.id, code: wCode } }, update: { name: w }, create: { lgaId: lgaRow.id, code: wCode, name: w } });
+        wardCount++;
+      }
+    }
+  }
+
+  // Back up the raw file server-side (units + LGA/ward backbone) so the warehouse
+  // can be rebuilt — including empty LGAs — without re-uploading files.
+  const backup = { units: rows, structure: structure || [] } as any;
   await db.geoImport.upsert({
     where: { state },
-    update: { units: unitCount, payload: rows as any },
-    create: { state, units: unitCount, payload: rows as any },
+    update: { units: unitCount, payload: backup },
+    create: { state, units: unitCount, payload: backup },
   });
 
-  return { state, lgas: byLga.size, wards: wardCount, units: unitCount, ms: Date.now() - started };
+  const lgaCount = await db.lga.count({ where: { stateId: stateId || undefined } });
+  return { state, lgas: lgaCount, wards: wardCount, units: unitCount, ms: Date.now() - started };
 }
 
 // List the server-side backups (one per imported state).
@@ -175,8 +214,11 @@ export async function rebuildFromSaved(): Promise<{ states: number; units: numbe
   const saved = await db.geoImport.findMany();
   let units = 0;
   for (const s of saved) {
-    const rows = ((s.payload as unknown) as RawUnit[]) || [];
-    const res = await importUnits(s.state, rows, true); // clean rebuild per state
+    // Payload is either the legacy raw rows array, or { units, structure }.
+    const p = s.payload as any;
+    const rows: RawUnit[] = Array.isArray(p) ? p : (p?.units || []);
+    const structure: LgaStructure[] | undefined = Array.isArray(p) ? undefined : p?.structure;
+    const res = await importUnits(s.state, rows, true, structure); // clean rebuild per state
     units += res.units;
   }
   return { states: saved.length, units };

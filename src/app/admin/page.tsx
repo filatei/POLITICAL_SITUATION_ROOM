@@ -971,10 +971,10 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
       try {
         const json = JSON.parse(await f.text());
         // A combined file has { states:[{state,units},…] }; a single file is { state, units }.
-        const parts: { state: string; units: any[] }[] = Array.isArray(json.states) ? json.states : [{ state: json.state, units: json.units }];
+        const parts: { state: string; units: any[]; structure?: any[] }[] = Array.isArray(json.states) ? json.states : [{ state: json.state, units: json.units, structure: json.structure }];
         for (const p of parts) {
           setBusy(p.state || f.name);
-          const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: p.state, units: p.units, replace: replaceMode }) });
+          const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: p.state, units: p.units, structure: p.structure, replace: replaceMode }) });
           const j = await r.json();
           if (r.ok) {
             setLog((l) => [`✓ ${j.result.state}: ${j.result.lgas} LGAs · ${j.result.wards} wards · ${j.result.units} units imported (${(j.result.ms / 1000).toFixed(0)}s)`, ...l].slice(0, 80));
