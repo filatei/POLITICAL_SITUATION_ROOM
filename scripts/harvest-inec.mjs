@@ -1,8 +1,12 @@
 #!/usr/bin/env node
+// ⚠️ INEC now serves these endpoints only to real browser sessions (bot protection),
+// so this Node version fails with "Gave up …" on ANY machine. Use the browser
+// harvester instead: scripts/harvest-inec-browser.js (paste into the DevTools
+// console on https://www.inecnigeria.org/polling-units/, run INEC.run()). This file
+// is kept only as a fallback if that protection is ever relaxed.
+//
 // Harvest Nigeria's INEC polling-unit register (State → LGA → Ward → Polling Unit)
-// to local JSON files, one per state, under data/inec/. Run this on a machine with
-// a normal residential IP — the production server's datacenter IP is blocked by
-// INEC, which is why the in-app "Harvest" button returns zeros. Node 18+ (uses
+// to local JSON files, one per state, under data/inec/. Node 18+ (uses
 // the built-in fetch; no npm install needed).
 //
 //   node scripts/harvest-inec.mjs                 # all 37 states (skips finished ones)

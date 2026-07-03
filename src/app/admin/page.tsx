@@ -887,11 +887,11 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   return (
     <section className="card p-5">
       <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Polling-unit warehouse</h2>
-      <p className="mb-3 text-[11px] text-muted">Nigeria&apos;s full LGA → Ward → Polling-Unit register so every election can pick real units. Idempotent — re-importing a state just updates it. INEC blocks the server&apos;s IP, so harvest on a laptop with <span className="tabular">scripts/harvest-inec.mjs</span> and upload the files below.</p>
+      <p className="mb-3 text-[11px] text-muted">Nigeria&apos;s full LGA → Ward → Polling-Unit register so every election can pick real units. Idempotent — re-importing a state just updates it. INEC blocks non-browser clients, so harvest by pasting <span className="tabular">scripts/harvest-inec-browser.js</span> into your browser console on inecnigeria.org, then upload the downloaded files below.</p>
 
       <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 p-3">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">Import harvested files</div>
-        <p className="mt-1 text-[11px] text-muted">Select one or more <span className="tabular">data/inec/*.json</span> files produced by the harvest script.</p>
+        <p className="mt-1 text-[11px] text-muted">Select one or more <span className="tabular">&lt;STATE&gt;.json</span> files downloaded by the browser harvester.</p>
         <input ref={fileRef} type="file" accept=".json,application/json" multiple disabled={!!busy}
           onChange={(e) => importFiles(e.target.files)}
           className="mt-2 block w-full text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white" />
