@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   if (!requireRole(s, ["ADMIN", "COORDINATOR"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const url = new URL(req.url);
+  const stateId = url.searchParams.get("stateId");
   const lgaId = url.searchParams.get("lgaId");
   const wardId = url.searchParams.get("wardId");
   const unitId = url.searchParams.get("unitId");
@@ -87,12 +88,74 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // ---- All LGAs ----
-  const lgas = await db.lga.findMany({
+  // ---- LGAs in a state ----
+  if (stateId) {
+    const lgas = await db.lga.findMany({
+      where: { stateId },
+      orderBy: { name: "asc" },
+      include: { _count: { select: { wards: true, units: true, agents: true } } },
+    });
+    return NextResponse.json({
+      lgas: lgas.map((l) => ({ id: l.id, name: l.name, wards: l._count.wards, units: l._count.units, codes: l._count.agents })),
+    });
+  }
+
+  // ---- All states (top of the tree) ----
+  const states = await db.state.findMany({
     orderBy: { name: "asc" },
-    include: { _count: { select: { wards: true, units: true, agents: true } } },
+    include: { _count: { select: { lgas: true, units: true, agents: true } } },
   });
+  const wardCounts = await db.ward.groupBy({ by: ["lgaId"], _count: { _all: true } });
+  // Map ward counts up to states via a single lga→state lookup.
+  const lgaState = await db.lga.findMany({ select: { id: true, stateId: true } });
+  const stateOfLga = new Map(lgaState.map((l) => [l.id, l.stateId]));
+  const wardsByState = new Map<string, number>();
+  for (const w of wardCounts) {
+    const sid = stateOfLga.get(w.lgaId);
+    if (sid) wardsByState.set(sid, (wardsByState.get(sid) || 0) + w._count._all);
+  }
   return NextResponse.json({
-    lgas: lgas.map((l) => ({ id: l.id, name: l.name, wards: l._count.wards, units: l._count.units, codes: l._count.agents })),
+    states: states.map((s) => ({
+      id: s.id, name: s.name, code: s.code,
+      lgas: s._count.lgas, wards: wardsByState.get(s.id) || 0, units: s._count.units, codes: s._count.agents,
+    })),
   });
+}
+
+// Manually add a State / LGA / Ward / Polling-Unit branch (for INEC gaps that can't
+// be harvested). Upserts the hierarchy; whatever level's name is provided is created.
+export async function POST(req: NextRequest) {
+  const s = await getSession(req);
+  if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const b = await req.json().catch(() => ({}));
+  const stateName = String(b.state || "").toUpperCase().trim();
+  const lgaName = String(b.lga || "").trim();
+  const wardName = String(b.ward || "").trim();
+  const puName = String(b.pu || "").trim();
+  const voters = Number(b.registeredVoters) || 0;
+  if (!stateName) return NextResponse.json({ error: "state is required" }, { status: 400 });
+
+  const slug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "x";
+
+  const existingState = await db.state.findFirst({ where: { name: stateName } });
+  const st = existingState || (await db.state.create({ data: { code: `m-${slug(stateName)}`, name: stateName } }));
+
+  let created: any = { state: st.name };
+  if (lgaName) {
+    const lCode = `${st.code}-${slug(lgaName)}`;
+    const lga = await db.lga.upsert({ where: { stateId_code: { stateId: st.id, code: lCode } }, update: { name: lgaName }, create: { stateId: st.id, code: lCode, name: lgaName } });
+    created.lga = lga.name;
+    if (wardName) {
+      const wCode = `${lCode}-${slug(wardName)}`;
+      const ward = await db.ward.upsert({ where: { lgaId_code: { lgaId: lga.id, code: wCode } }, update: { name: wardName }, create: { lgaId: lga.id, code: wCode, name: wardName } });
+      created.ward = ward.name;
+      if (puName) {
+        const uCode = `${wCode}-${slug(puName)}-${Date.now().toString(36).slice(-4)}`;
+        const pu = await db.pollingUnit.create({ data: { wardId: ward.id, lgaId: lga.id, stateId: st.id, code: uCode, name: puName, registeredVoters: voters } });
+        created.pu = pu.name;
+      }
+    }
+  }
+  await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "geo:manual-add", entity: "PollingUnit", meta: created } });
+  return NextResponse.json({ ok: true, created });
 }

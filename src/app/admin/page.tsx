@@ -553,7 +553,8 @@ function StaffUsers({ onFlash }: { onFlash: (s: string) => void }) {
   );
 }
 
-/* -------- Geography drill-down: LGA → Ward → Unit -------- */
+/* -------- Geography tree: State → LGA → Ward → Unit -------- */
+type GState = { id: string; name: string; code: string; lgas: number; wards: number; units: number; codes: number };
 type GLga = { id: string; name: string; wards: number; units: number; codes: number };
 type GWard = { id: string; name: string; code: string; units: number; codes: number };
 type GUnit = { id: string; name: string; code: string; codes: number; used: number; active: number; reports: number };
@@ -564,18 +565,33 @@ type GUnitDetail = {
 };
 
 function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; onOpenAgent: (id: string) => void }) {
-  const [lgas, setLgas] = useState<GLga[]>([]);
-  const [lga, setLga] = useState<GLga | null>(null);
-  const [wards, setWards] = useState<GWard[]>([]);
-  const [ward, setWard] = useState<GWard | null>(null);
-  const [units, setUnits] = useState<GUnit[]>([]);
+  const [states, setStates] = useState<GState[]>([]);
+  const [lgasBy, setLgasBy] = useState<Record<string, GLga[]>>({});
+  const [wardsBy, setWardsBy] = useState<Record<string, GWard[]>>({});
+  const [unitsBy, setUnitsBy] = useState<Record<string, GUnit[]>>({});
+  const [openS, setOpenS] = useState<Record<string, boolean>>({});
+  const [openL, setOpenL] = useState<Record<string, boolean>>({});
+  const [openW, setOpenW] = useState<Record<string, boolean>>({});
   const [detail, setDetail] = useState<GUnitDetail | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [add, setAdd] = useState({ state: "", lga: "", ward: "", pu: "" });
 
-  useEffect(() => { api("/api/admin/geo").then(async (r) => r.ok && setLgas((await r.json()).lgas)); }, []);
+  async function loadStates() { const r = await api("/api/admin/geo"); if (r.ok) setStates((await r.json()).states); }
+  useEffect(() => { loadStates(); }, []);
 
-  async function openLga(l: GLga) { setLga(l); setWard(null); setDetail(null); setUnits([]); const r = await api(`/api/admin/geo?lgaId=${l.id}`); if (r.ok) setWards((await r.json()).wards); }
-  async function openWard(w: GWard) { setWard(w); setDetail(null); const r = await api(`/api/admin/geo?wardId=${w.id}`); if (r.ok) setUnits((await r.json()).units); }
+  async function toggleState(s: GState) {
+    setOpenS((o) => ({ ...o, [s.id]: !o[s.id] }));
+    if (!lgasBy[s.id]) { const r = await api(`/api/admin/geo?stateId=${s.id}`); if (r.ok) setLgasBy((m) => ({ ...m, [s.id]: (await r.json()).lgas })); }
+  }
+  async function toggleLga(l: GLga) {
+    setOpenL((o) => ({ ...o, [l.id]: !o[l.id] }));
+    if (!wardsBy[l.id]) { const r = await api(`/api/admin/geo?lgaId=${l.id}`); if (r.ok) setWardsBy((m) => ({ ...m, [l.id]: (await r.json()).wards })); }
+  }
+  async function toggleWard(w: GWard) {
+    setOpenW((o) => ({ ...o, [w.id]: !o[w.id] }));
+    if (!unitsBy[w.id]) { const r = await api(`/api/admin/geo?wardId=${w.id}`); if (r.ok) setUnitsBy((m) => ({ ...m, [w.id]: (await r.json()).units })); }
+  }
   async function openUnit(u: GUnit) { const r = await api(`/api/admin/geo?unitId=${u.id}`); if (r.ok) setDetail(await r.json()); }
   async function refreshDetail() { if (detail) { const r = await api(`/api/admin/geo?unitId=${detail.unit.id}`); if (r.ok) setDetail(await r.json()); } }
 
@@ -588,17 +604,45 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
     if (r.ok) { onFlash(`New code ${j.agent.inviteCode}`); refreshDetail(); } else onFlash(j.error || "Failed");
   }
 
+  async function submitAdd() {
+    if (!add.state.trim()) return;
+    setBusy(true);
+    const r = await api("/api/admin/geo", { method: "POST", body: JSON.stringify(add) });
+    const j = await r.json();
+    setBusy(false);
+    if (r.ok) {
+      onFlash(`Added: ${Object.values(j.created).join(" / ")}`);
+      setAdd({ state: add.state, lga: "", ward: "", pu: "" });
+      // Refresh: clear caches so re-expanding refetches, and update counts.
+      setLgasBy({}); setWardsBy({}); setUnitsBy({}); loadStates();
+    } else onFlash(typeof j.error === "string" ? j.error : "Add failed");
+  }
+
   const fmt = (s?: string | null) => (s ? new Date(s).toLocaleString() : "");
   const typeColor: Record<string, string> = { INCIDENT: "bg-bad/10 text-bad", SCORE: "bg-accent/10 text-accent", MESSAGE: "bg-ink/10 text-ink", STATUS: "bg-ink/10 text-muted" };
+  const chevron = (open: boolean) => <span className="inline-block w-3 text-muted">{open ? "▾" : "▸"}</span>;
 
   return (
     <section className="card p-5">
-      <div className="mb-3 flex items-center gap-1.5 text-xs">
-        <button className={`font-semibold ${lga ? "text-accent hover:underline" : "text-ink"}`} onClick={() => { setLga(null); setWard(null); setDetail(null); }}>All LGAs</button>
-        {lga && <><span className="text-muted">/</span><button className={`font-semibold ${ward ? "text-accent hover:underline" : "text-ink"}`} onClick={() => { setWard(null); setDetail(null); }}>{lga.name}</button></>}
-        {ward && <><span className="text-muted">/</span><button className={`font-semibold ${detail ? "text-accent hover:underline" : "text-ink"}`} onClick={() => setDetail(null)}>{ward.name}</button></>}
-        {detail && <><span className="text-muted">/</span><span className="font-semibold text-ink">{detail.unit.name}</span></>}
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted">
+          {detail ? <button className="text-accent hover:underline" onClick={() => setDetail(null)}>← Back to geography tree</button> : "Geography — State › LGA › Ward › Unit"}
+        </h2>
+        {!detail && <button className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setShowAdd((v) => !v)}>{showAdd ? "Close" : "+ Add manually"}</button>}
       </div>
+
+      {!detail && showAdd && (
+        <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 p-3">
+          <p className="mb-2 text-[11px] text-muted">Add a missing branch (for INEC gaps that can&apos;t be harvested). Fill what you need — State only, or down to a Polling Unit. Existing names are reused, not duplicated.</p>
+          <div className="grid gap-2 sm:grid-cols-4">
+            <input className="input py-1.5 text-sm" value={add.state} onChange={(e) => setAdd({ ...add, state: e.target.value })} placeholder="State e.g. BORNO" />
+            <input className="input py-1.5 text-sm" value={add.lga} onChange={(e) => setAdd({ ...add, lga: e.target.value })} placeholder="LGA (optional)" />
+            <input className="input py-1.5 text-sm" value={add.ward} onChange={(e) => setAdd({ ...add, ward: e.target.value })} placeholder="Ward (optional)" />
+            <input className="input py-1.5 text-sm" value={add.pu} onChange={(e) => setAdd({ ...add, pu: e.target.value })} placeholder="Polling unit (optional)" />
+          </div>
+          <button className="btn-primary mt-2 px-3 py-1.5 text-xs" disabled={busy || !add.state.trim()} onClick={submitAdd}>{busy ? "Adding…" : "Add branch"}</button>
+        </div>
+      )}
 
       {/* Unit detail */}
       {detail ? (
@@ -645,56 +689,58 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
             </div>
           </div>
         </div>
-      ) : units.length || ward ? (
-        <>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Units in {ward?.name}</h3>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {units.map((u) => (
-              <button key={u.id} onClick={() => openUnit(u)} className="rounded-lg border border-line p-3 text-left hover:bg-ink/5">
-                <div className="truncate text-sm font-semibold">{u.name}</div>
-                <div className="mt-1 flex flex-wrap gap-1 text-[11px] text-muted">
-                  <span className="pill bg-ink/10">{u.codes} code{u.codes === 1 ? "" : "s"}</span>
-                  {u.active > 0 && <span className="pill bg-good/15 text-good">{u.active} active</span>}
-                  <span className="pill bg-ink/10">{u.reports} report{u.reports === 1 ? "" : "s"}</span>
-                </div>
-              </button>
-            ))}
-            {!units.length && <p className="text-xs text-muted">No units in this ward.</p>}
-          </div>
-        </>
-      ) : lga ? (
-        <>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Wards in {lga.name}</h3>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {wards.map((w) => (
-              <button key={w.id} onClick={() => openWard(w)} className="rounded-lg border border-line p-3 text-left hover:bg-ink/5">
-                <div className="truncate text-sm font-semibold">{w.name}</div>
-                <div className="mt-1 flex gap-1 text-[11px] text-muted">
-                  <span className="pill bg-ink/10">{w.units} unit{w.units === 1 ? "" : "s"}</span>
-                  <span className="pill bg-ink/10">{w.codes} code{w.codes === 1 ? "" : "s"}</span>
-                </div>
-              </button>
-            ))}
-            {!wards.length && <p className="text-xs text-muted">No wards.</p>}
-          </div>
-        </>
       ) : (
-        <>
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Geography — drill down to administer units</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {lgas.map((l) => (
-              <button key={l.id} onClick={() => openLga(l)} className="rounded-lg border border-line p-3 text-left hover:bg-ink/5">
-                <div className="truncate text-sm font-semibold">{l.name}</div>
-                <div className="mt-1 flex flex-wrap gap-1 text-[11px] text-muted">
-                  <span className="pill bg-ink/10">{l.wards} wards</span>
-                  <span className="pill bg-ink/10">{l.units} units</span>
-                  <span className="pill bg-ink/10">{l.codes} codes</span>
-                </div>
+        <div className="space-y-1">
+          {states.map((s) => (
+            <div key={s.id} className="rounded-lg border border-line">
+              <button onClick={() => toggleState(s)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-ink/5">
+                <span className="font-semibold">{chevron(!!openS[s.id])} {s.name}</span>
+                <span className="shrink-0 text-[11px] text-muted">{s.lgas} LGAs · {s.wards} wards · {s.units.toLocaleString()} units</span>
               </button>
-            ))}
-            {!lgas.length && <p className="text-xs text-muted">Loading…</p>}
-          </div>
-        </>
+              {openS[s.id] && (
+                <div className="border-t border-line/60 pl-3">
+                  {(lgasBy[s.id] || []).map((l) => (
+                    <div key={l.id}>
+                      <button onClick={() => toggleLga(l)} className="flex w-full items-center justify-between gap-2 py-1.5 pr-3 text-left text-sm hover:bg-ink/5">
+                        <span>{chevron(!!openL[l.id])} {l.name}</span>
+                        <span className="shrink-0 text-[11px] text-muted">{l.wards} wards · {l.units} units</span>
+                      </button>
+                      {openL[l.id] && (
+                        <div className="pl-4">
+                          {(wardsBy[l.id] || []).map((w) => (
+                            <div key={w.id}>
+                              <button onClick={() => toggleWard(w)} className="flex w-full items-center justify-between gap-2 py-1.5 pr-3 text-left text-sm hover:bg-ink/5">
+                                <span>{chevron(!!openW[w.id])} {w.name}</span>
+                                <span className="shrink-0 text-[11px] text-muted">{w.units} units{w.codes ? ` · ${w.codes} codes` : ""}</span>
+                              </button>
+                              {openW[w.id] && (
+                                <div className="grid gap-1 py-1 pl-6 sm:grid-cols-2">
+                                  {(unitsBy[w.id] || []).map((u) => (
+                                    <button key={u.id} onClick={() => openUnit(u)} className="flex items-center justify-between gap-2 rounded-md border border-line/60 px-2 py-1 text-left text-[13px] hover:border-accent/40 hover:bg-ink/5">
+                                      <span className="truncate">{u.name}</span>
+                                      <span className="shrink-0 text-[10px] text-muted">{u.codes ? `${u.codes} code${u.codes === 1 ? "" : "s"}` : "—"}</span>
+                                    </button>
+                                  ))}
+                                  {!unitsBy[w.id] && <span className="text-[11px] text-muted">Loading…</span>}
+                                  {unitsBy[w.id] && !unitsBy[w.id].length && <span className="text-[11px] text-muted">No units.</span>}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {!wardsBy[l.id] && <div className="py-1 text-[11px] text-muted">Loading…</div>}
+                          {wardsBy[l.id] && !wardsBy[l.id].length && <div className="py-1 text-[11px] text-muted">No wards.</div>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {!lgasBy[s.id] && <div className="py-1.5 text-[11px] text-muted">Loading…</div>}
+                  {lgasBy[s.id] && !lgasBy[s.id].length && <div className="py-1.5 text-[11px] text-muted">No LGAs.</div>}
+                </div>
+              )}
+            </div>
+          ))}
+          {!states.length && <p className="text-xs text-muted">No geography yet — import harvested files above.</p>}
+        </div>
       )}
     </section>
   );
