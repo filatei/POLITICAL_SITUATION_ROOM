@@ -8,7 +8,7 @@ import type { Session } from "@/lib/auth";
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
 type Lga = { id: string; name: string };
-type Agent = { id: string; name: string; phone?: string; email?: string | null; inviteCode: string; status: string; unitLabel: string; usedAt?: string | null; lastSeenAt?: string | null };
+type Agent = { id: string; name: string; phone?: string; email?: string | null; inviteCode: string; status: string; unitLabel: string; unit?: string | null; lgaId?: string | null; usedAt?: string | null; lastSeenAt?: string | null };
 
 export default function AdminPage() {
   const [state, setState] = useState<"loading" | "in" | "out" | "denied">("loading");
@@ -54,8 +54,12 @@ function Console({ session }: { session: Session }) {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState("");
   const [bulkLga, setBulkLga] = useState("");
+  const [perUnit, setPerUnit] = useState("6");
   const [bulkResult, setBulkResult] = useState<{ name: string; inviteCode: string; unitLabel: string }[] | null>(null);
   const [qr, setQr] = useState<{ code: string; label?: string } | null>(null);
+  const [agentQ, setAgentQ] = useState("");
+  const [agentFilter, setAgentFilter] = useState<"all" | "unused" | "active">("all");
+  const [edit, setEdit] = useState<{ id: string; name: string; phone: string } | null>(null);
 
   function copyText(text: string) {
     navigator.clipboard?.writeText(text);
@@ -88,7 +92,7 @@ function Console({ session }: { session: Session }) {
   async function bulk() {
     if (!bulkLga) return;
     setBusy(true); setBulkResult(null);
-    const r = await api("/api/admin/agents/bulk", { method: "POST", body: JSON.stringify({ lgaId: bulkLga }) });
+    const r = await api("/api/admin/agents/bulk", { method: "POST", body: JSON.stringify({ lgaId: bulkLga, perUnit: Number(perUnit) || 1 }) });
     setBusy(false);
     const j = await r.json();
     if (r.ok) { setBulkResult(j.created); setFlash(`Generated ${j.count} codes`); load(); }
@@ -100,8 +104,30 @@ function Console({ session }: { session: Session }) {
     if (r.ok) { const j = await r.json(); setFlash(`New code: ${j.inviteCode}`); load(); }
   }
 
+  async function saveRecipient() {
+    if (!edit) return;
+    const r = await api("/api/admin/agents", { method: "PATCH", body: JSON.stringify({ id: edit.id, name: edit.name, phone: edit.phone }) });
+    const j = await r.json();
+    if (r.ok) { setFlash(`Assigned to ${j.agent.name}`); setEdit(null); load(); }
+    else setFlash(j.error || "Failed");
+  }
+
+  // Codes that already exist in the LGA picked for bulk generation.
+  const lgaCodes = useMemo(() => (bulkLga ? agents.filter((a) => a.lgaId === bulkLga) : []), [agents, bulkLga]);
+
+  const filteredAgents = useMemo(() => {
+    const s = agentQ.trim().toLowerCase();
+    return agents.filter((a) => {
+      if (agentFilter === "unused" && a.usedAt) return false;
+      if (agentFilter === "active" && a.status !== "ACTIVE") return false;
+      if (!s) return true;
+      return [a.name, a.inviteCode, a.unitLabel, a.email || ""].some((x) => x.toLowerCase().includes(s));
+    });
+  }, [agents, agentQ, agentFilter]);
+
   function exportCsv() {
-    const rows = [["name", "code", "unit", "status"], ...agents.map((a) => [a.name, a.inviteCode, a.unitLabel, a.status])];
+    const rows = [["name", "code", "unit", "email", "phone", "status", "activated", "last_seen"],
+      ...agents.map((a) => [a.name, a.inviteCode, a.unitLabel, a.email || "", a.phone || "", a.status, a.usedAt || "", a.lastSeenAt || ""])];
     const csv = rows.map((r) => r.map((c) => `"${(c || "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const link = document.createElement("a"); link.href = url; link.download = "agent-codes.csv"; link.click();
@@ -151,15 +177,42 @@ function Console({ session }: { session: Session }) {
 
         {/* Bulk generate */}
         <section className="card p-5">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Bulk: one code per unit in an LGA</h2>
-          <div className="flex gap-2">
-            <select className="input" value={bulkLga} onChange={(e) => setBulkLga(e.target.value)}>
-              <option value="">Select LGA…</option>
-              {lgas.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            <button className="btn-primary shrink-0" disabled={busy || !bulkLga} onClick={bulk}>Generate</button>
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Bulk: codes per unit in an LGA</h2>
+          <select className="input mb-2" value={bulkLga} onChange={(e) => setBulkLga(e.target.value)}>
+            <option value="">Select LGA…</option>
+            {lgas.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+          <div className="flex items-end gap-2">
+            <div className="w-32">
+              <label className="label">Codes / unit</label>
+              <input className="input tabular" type="number" min={1} max={10} value={perUnit} onChange={(e) => setPerUnit(e.target.value.replace(/[^0-9]/g, ""))} />
+            </div>
+            <button className="btn-primary flex-1" disabled={busy || !bulkLga} onClick={bulk}>{busy ? "Generating…" : "Generate"}</button>
           </div>
-          <p className="mt-2 text-[11px] text-muted">Creates an agent + code for every polling unit in that LGA that doesn't already have one.</p>
+          <p className="mt-2 text-[11px] text-muted">Mints this many <b>fresh</b> codes for <b>every</b> unit in the LGA. Run it again to add more — existing codes are kept, new distinct ones are added.</p>
+
+          {bulkLga && (
+            <div className="mt-3 border-t border-line pt-3">
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted">
+                <span>Existing codes here</span>
+                <span>{lgaCodes.length} · {lgaCodes.filter((a) => a.usedAt).length} in use</span>
+              </div>
+              {lgaCodes.length ? (
+                <div className="max-h-52 space-y-1 overflow-y-auto text-xs">
+                  {lgaCodes.map((a) => (
+                    <button key={a.id} className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-ink/5"
+                      onClick={() => setQr({ code: a.inviteCode, label: `${a.name} · ${a.unitLabel}` })} title="Show QR / copy">
+                      <span className="min-w-0">
+                        <span className="tabular block font-semibold text-accent">{a.inviteCode}</span>
+                        <span className="block truncate text-muted">{a.usedAt ? `Used by ${a.name} · ${a.unit || a.unitLabel}` : `Unused · ${a.unit || a.unitLabel}`}</span>
+                      </span>
+                      <span className={`pill shrink-0 ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.usedAt ? "bg-warn/15 text-warn" : "bg-ink/5 text-muted"}`}>{a.usedAt ? (a.status === "ACTIVE" ? "active" : "used") : "free"}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-muted">No codes generated for this LGA yet.</p>}
+            </div>
+          )}
           {bulkResult && (
             <div className="mt-3 max-h-64 space-y-1 overflow-y-auto border-t border-line pt-3 text-xs">
               {bulkResult.map((r) => (
@@ -173,30 +226,57 @@ function Console({ session }: { session: Session }) {
           )}
         </section>
 
-        {/* Agents list */}
+        {/* Agents / code history */}
         <section className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Agents ({agents.length})</h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Codes ({filteredAgents.length}/{agents.length})</h2>
             <button className="text-xs text-accent hover:underline" onClick={exportCsv}>Export CSV</button>
           </div>
+          <input className="input mb-2" value={agentQ} onChange={(e) => setAgentQ(e.target.value)} placeholder="Search name / code / unit / email…" />
+          <div className="mb-3 flex gap-1 rounded-lg border border-line bg-black/20 p-1 text-xs">
+            {(["all", "unused", "active"] as const).map((f) => (
+              <button key={f} onClick={() => setAgentFilter(f)}
+                className={`flex-1 rounded-md px-2 py-1.5 font-semibold capitalize transition ${agentFilter === f ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted"}`}>{f}</button>
+            ))}
+          </div>
           <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
-            {agents.map((a) => (
+            {filteredAgents.map((a) => (
               <div key={a.id} className="rounded-lg border border-line p-3">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{a.name}</div>
                     <div className="truncate text-xs text-muted">{a.unitLabel}</div>
                     {a.email && <div className="truncate text-[11px] text-accent">🔑 {a.email}</div>}
+                    {a.phone && <div className="truncate text-[11px] text-muted">📞 {a.phone}</div>}
+                    <div className="mt-0.5 text-[10px] text-muted">
+                      {a.usedAt ? `Used ${new Date(a.usedAt).toLocaleString()}` : "Not used yet"}
+                      {a.lastSeenAt ? ` · seen ${new Date(a.lastSeenAt).toLocaleString()}` : ""}
+                    </div>
                   </div>
-                  <span className={`pill ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.status === "SUSPENDED" ? "bg-bad/15 text-bad" : "bg-ink/5 text-muted"}`}>{a.status}</span>
+                  <span className={`pill shrink-0 ${a.status === "ACTIVE" ? "bg-good/15 text-good" : a.status === "SUSPENDED" ? "bg-bad/15 text-bad" : "bg-ink/5 text-muted"}`}>{a.status}</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <button className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent hover:bg-accent/15" onClick={() => setQr({ code: a.inviteCode, label: `${a.name} · ${a.unitLabel}` })} title="Show QR / copy">{a.inviteCode} ⧉</button>
-                  <button className="text-xs text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
-                </div>
+
+                {edit?.id === a.id ? (
+                  <div className="mt-2 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-2">
+                    <input className="input py-1 text-sm" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Recipient name" />
+                    <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputMode="tel" placeholder="Recipient phone (optional)" />
+                    <div className="flex gap-2">
+                      <button className="btn-primary flex-1 py-1.5 text-sm" onClick={saveRecipient}>Save recipient</button>
+                      <button className="btn-ghost py-1.5 text-sm" onClick={() => setEdit(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <button className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent hover:bg-accent/15" onClick={() => setQr({ code: a.inviteCode, label: `${a.name} · ${a.unitLabel}` })} title="Show QR / copy">{a.inviteCode} ⧉</button>
+                    <div className="flex items-center gap-3 text-xs">
+                      <button className="text-muted hover:text-ink" onClick={() => setEdit({ id: a.id, name: a.name, phone: a.phone || "" })}>Assign</button>
+                      <button className="text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
-            {!agents.length && <p className="text-sm text-muted">No agents yet.</p>}
+            {!filteredAgents.length && <p className="text-sm text-muted">No codes match.</p>}
           </div>
         </section>
       </main>
