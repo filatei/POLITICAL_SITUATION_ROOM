@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ContactForm from "@/components/ContactForm";
+import GeoShowcase from "@/components/GeoShowcase";
 import Onboard from "@/components/Onboard";
 import { getBrand } from "@/lib/brand";
 
@@ -152,6 +153,16 @@ export default async function Home() {
             <div className="text-sm font-semibold">Winning rules</div>
             <p className="mt-1 text-sm text-muted"><b>FPTP</b> (most valid votes) for Governor, Senator, Reps, Assembly, Chairman and Councillor. <b>President</b>: most votes <i>and</i> ≥ 25% in two-thirds of the 36 states + FCT, else a run-off.</p>
           </div>
+        </div>
+      </section>
+
+      {/* Live INEC geography from the warehouse */}
+      <section className="border-t border-line bg-white/[0.02]">
+        <div className="mx-auto max-w-6xl px-5 py-16">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Nigeria&apos;s polling geography</h2>
+          <p className="mt-2 max-w-2xl text-muted">The full register — every State → LGA → Ward → Polling Unit, sourced from INEC&apos;s delimitation. Search a state and expand it to see its LGAs with ward and unit counts.</p>
+          <div className="mt-8"><GeoShowcase /></div>
+          <p className="mt-4 text-xs text-muted">Source: Independent National Electoral Commission (INEC) polling-unit register. Counts reflect the data currently warehoused.</p>
         </div>
       </section>
 
