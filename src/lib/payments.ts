@@ -1,12 +1,20 @@
 import crypto from "crypto";
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "";
-const SQUAD_SECRET = process.env.SQUAD_SECRET_KEY || "";
-// Squad: live https://api-d.squadco.com ; sandbox https://sandbox-api-d.squadco.com
-const SQUAD_BASE = process.env.SQUAD_BASE_URL || "https://api-d.squadco.com";
+// Live SQUAD_SECRET_KEY takes precedence; else fall back to the sandbox secret.
+const SQUAD_LIVE = process.env.SQUAD_SECRET_KEY || "";
+const SQUAD_SANDBOX = process.env.SQUAD_SANDBOX_SECRET || "";
+const SQUAD_SECRET = SQUAD_LIVE || SQUAD_SANDBOX;
+// Squad base auto-selects: live if a live key is set, sandbox if only sandbox key.
+const SQUAD_BASE = process.env.SQUAD_BASE_URL || (SQUAD_LIVE ? "https://api-d.squadco.com" : "https://sandbox-api-d.squadco.com");
+const SQUAD_MERCHANT_ID = process.env.SQUAD_MERCHANT_ID || "";
 
 export const paystackEnabled = !!PAYSTACK_SECRET;
 export const squadEnabled = !!SQUAD_SECRET;
+
+// Reference prefix namespaces this outlet so a shared merchant's single webhook
+// (a central hub) can route events to the right app by prefix.
+export const REF_PREFIX = process.env.BILLING_REF_PREFIX || "psr";
 
 type InitOpts = { email: string; amountKobo: number; reference: string; callbackUrl: string; metadata?: any };
 
@@ -44,6 +52,7 @@ export async function squadInit(o: InitOpts) {
     body: JSON.stringify({
       email: o.email, amount: o.amountKobo, currency: "NGN",
       transaction_ref: o.reference, callback_url: o.callbackUrl, metadata: o.metadata,
+      ...(SQUAD_MERCHANT_ID ? { merchant_id: SQUAD_MERCHANT_ID } : {}),
     }),
   });
   const j = await res.json();

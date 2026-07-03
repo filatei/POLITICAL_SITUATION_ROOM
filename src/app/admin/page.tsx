@@ -832,6 +832,14 @@ function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
   async function load() { const r = await api("/api/billing/status"); if (r.ok) setSt(await r.json()); }
   useEffect(() => { load(); }, []);
 
+  async function reconcile() {
+    setBusy(true);
+    const r = await api("/api/billing/reconcile", { method: "POST" });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { onFlash(j.credited ? `Confirmed ${j.credited} payment(s)` : "No new payments"); load(); } else onFlash(j.error || "Failed");
+  }
+
   const PRICE = st?.priceNaira ?? 1000;
   const free = st?.freeSeats ?? 10;
   const seats = (Number(units) || 0) * (Number(perUnit) || 0);
@@ -852,7 +860,10 @@ function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
 
   return (
     <section className="card p-5">
-      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Seats &amp; billing</h2>
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Seats &amp; billing</h2>
+        <button className="text-xs text-accent hover:underline" disabled={busy} onClick={reconcile}>Check payments</button>
+      </div>
       <p className="mb-3 text-[11px] text-muted">A seat = one agent code. First {free} are free to trial; extra seats are ₦{PRICE.toLocaleString()} each, one-off for this election.</p>
 
       {st && (

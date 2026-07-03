@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
 import { costForSeats } from "@/lib/billing";
-import { paystackInit, squadInit, paystackEnabled, squadEnabled } from "@/lib/payments";
+import { paystackInit, squadInit, paystackEnabled, squadEnabled, REF_PREFIX } from "@/lib/payments";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
   const { kobo } = costForSeats(n);
-  const reference = `psr_${Date.now()}_${randomUUID().slice(0, 8)}`;
+  const reference = `${REF_PREFIX}_${Date.now()}_${randomUUID().slice(0, 8)}`;
   await db.payment.create({ data: { reference, provider, electionId: election.id, seats: n, amount: kobo, email: mail, status: "PENDING", meta: { by: s!.sub } } });
 
   const appUrl = process.env.APP_URL || new URL(req.url).origin;
