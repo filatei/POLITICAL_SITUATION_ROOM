@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sendMail, mailEnabled, CONTACT_TO } from "@/lib/mailer";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,19 @@ export async function POST(req: NextRequest) {
   if (!n || !e || !m || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) {
     return NextResponse.json({ error: "Please provide your name, a valid email and a message." }, { status: 400 });
   }
-  await db.contactMessage.create({ data: { name: n, email: e, subject: String(subject || "").trim().slice(0, 200) || null, message: m } });
+  const sub = String(subject || "").trim().slice(0, 200) || null;
+  await db.contactMessage.create({ data: { name: n, email: e, subject: sub, message: m } });
+
+  // Email us the enquiry (best-effort — the DB copy is the source of truth).
+  if (mailEnabled) {
+    try {
+      await sendMail({
+        to: CONTACT_TO,
+        replyTo: e,
+        subject: `New enquiry: ${sub || "Contact form"}`,
+        text: `From: ${n} <${e}>\nSubject: ${sub || "(none)"}\n\n${m}\n\n— sent from the Situation Room contact form`,
+      });
+    } catch { /* delivered later from the stored copy if SMTP hiccups */ }
+  }
   return NextResponse.json({ ok: true });
 }
