@@ -44,11 +44,16 @@ export function canAdminTenant(email: string | null | undefined, tenant: { admin
 // On first boot after multi-tenancy lands, wrap the existing election in a
 // default tenant so nothing is orphaned (slug: DEFAULT_TENANT_SLUG env or ondogov2027).
 export async function ensureDefaultTenant() {
+  // Auto-grandfather is now OPT-IN. It only wraps an existing election in a
+  // generous-seat default tenant when DEFAULT_TENANT_SLUG is explicitly set.
+  // Otherwise tenants are created solely through onboarding (standard 10 free
+  // seats), so a reset can't be silently undone on the next boot.
+  const slug = process.env.DEFAULT_TENANT_SLUG;
+  if (!slug) return { created: false, skipped: true };
   const existing = await db.tenant.count();
   if (existing > 0) return { created: false };
   const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
   if (!election) return { created: false };
-  const slug = process.env.DEFAULT_TENANT_SLUG || "ondogov2027";
   await db.tenant.create({
     data: { slug, name: election.name, electionId: election.id, adminEmails: SUPER_ADMINS },
   });

@@ -75,6 +75,75 @@ export async function harvestState(stateName: string): Promise<HarvestResult> {
   return { state, lgas: lgas.length, wards: wardCount, units: unitCount, ms: Date.now() - started };
 }
 
+export type RawUnit = { id?: string; pu?: string; delim?: string; lga?: string; ward?: string };
+
+// Import a state's units from a harvested file (produced by scripts/harvest-inec.mjs).
+// Units arrive as a flat list carrying their lga + ward names + delim; we group and
+// upsert into State/Lga/Ward/PollingUnit exactly like harvestState. Idempotent.
+export async function importUnits(stateName: string, rows: RawUnit[]): Promise<HarvestResult> {
+  const started = Date.now();
+  const state = stateName.toUpperCase().trim();
+
+  const byLga = new Map<string, Map<string, RawUnit[]>>();
+  for (const u of rows) {
+    const lga = String(u.lga || "").trim();
+    const ward = String(u.ward || "").trim();
+    if (!lga || !ward) continue;
+    if (!byLga.has(lga)) byLga.set(lga, new Map());
+    const wards = byLga.get(lga)!;
+    if (!wards.has(ward)) wards.set(ward, []);
+    wards.get(ward)!.push(u);
+  }
+
+  let stateId: string | null = null;
+  let wardCount = 0;
+  let unitCount = 0;
+  const ensureState = async (code: string) => {
+    if (stateId) return stateId;
+    const s = await db.state.upsert({ where: { code }, update: { name: state }, create: { code, name: state } });
+    stateId = s.id;
+    return stateId;
+  };
+
+  for (const [lga, wardMap] of byLga) {
+    for (const [ward, units] of wardMap) {
+      if (!units.length) continue;
+      const seg = String(units[0].delim || "").split("-");
+      const [ss, ll, ww] = [seg[0], seg[1], seg[2]];
+      const sCode = ss || slug(state);
+      const lCode = ss && ll ? `${ss}-${ll}` : `${sCode}-${slug(lga)}`;
+      const wCode = ss && ll && ww ? `${ss}-${ll}-${ww}` : `${lCode}-${slug(ward)}`;
+
+      const stId = await ensureState(sCode);
+      const lg = await db.lga.upsert({
+        where: { stateId_code: { stateId: stId, code: lCode } },
+        update: { name: lga },
+        create: { stateId: stId, code: lCode, name: lga },
+      });
+      const wd = await db.ward.upsert({
+        where: { lgaId_code: { lgaId: lg.id, code: wCode } },
+        update: { name: ward },
+        create: { lgaId: lg.id, code: wCode, name: ward },
+      });
+      wardCount++;
+      await db.pollingUnit.createMany({
+        data: units.map((u) => ({
+          wardId: wd.id,
+          lgaId: lg.id,
+          stateId: stId,
+          code: u.delim || `${wCode}-${u.id}`,
+          name: u.pu || "POLLING UNIT",
+          registeredVoters: 0,
+        })),
+        skipDuplicates: true,
+      });
+      unitCount += units.length;
+    }
+  }
+
+  return { state, lgas: byLga.size, wards: wardCount, units: unitCount, ms: Date.now() - started };
+}
+
 export async function warehouseSummary() {
   const [states, lgas, wards, units] = await Promise.all([
     db.state.count(),

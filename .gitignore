@@ -10,3 +10,6 @@ build/
 /public/uploads/
 prisma/*.db
 next-env.d.ts
+
+# Locally harvested INEC geo files (uploaded via admin, not committed)
+data/inec/

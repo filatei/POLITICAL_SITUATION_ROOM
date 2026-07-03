@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, logout } from "@/lib/session";
 import RoomLogin from "@/components/RoomLogin";
 import QrModal from "@/components/QrModal";
@@ -826,12 +826,38 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   const [summary, setSummary] = useState<{ states: number; lgas: number; wards: number; units: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const r = await api("/api/admin/geo/harvest");
     if (r.ok) { const j = await r.json(); setStates(j.states); setSummary(j.summary); }
   }
   useEffect(() => { load(); }, []);
+
+  // Import harvested JSON files (from scripts/harvest-inec.mjs) — the server can't
+  // reach INEC, so we upload the files harvested on a laptop.
+  async function importFiles(files: FileList | null) {
+    if (!files || !files.length) return;
+    for (const f of Array.from(files)) {
+      setBusy(f.name);
+      try {
+        const json = JSON.parse(await f.text());
+        const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: json.state, units: json.units }) });
+        const j = await r.json();
+        if (r.ok) {
+          setLog((l) => [`✓ ${j.result.state}: ${j.result.lgas} LGAs · ${j.result.wards} wards · ${j.result.units} units imported (${(j.result.ms / 1000).toFixed(0)}s)`, ...l].slice(0, 60));
+          setSummary(j.summary);
+          onFlash(`${j.result.state} imported — ${j.result.units} units`);
+        } else {
+          setLog((l) => [`✗ ${f.name}: ${j.error || "failed"}`, ...l].slice(0, 60));
+        }
+      } catch (e: any) {
+        setLog((l) => [`✗ ${f.name}: ${e?.message || "parse error"}`, ...l].slice(0, 60));
+      }
+    }
+    setBusy(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
 
   async function harvest(state: string) {
     setBusy(state);
@@ -861,7 +887,16 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   return (
     <section className="card p-5">
       <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Polling-unit warehouse</h2>
-      <p className="mb-3 text-[11px] text-muted">Import Nigeria&apos;s full LGA → Ward → Polling-Unit register from INEC so every election can pick real units. Idempotent — re-running a state just updates it.</p>
+      <p className="mb-3 text-[11px] text-muted">Nigeria&apos;s full LGA → Ward → Polling-Unit register so every election can pick real units. Idempotent — re-importing a state just updates it. INEC blocks the server&apos;s IP, so harvest on a laptop with <span className="tabular">scripts/harvest-inec.mjs</span> and upload the files below.</p>
+
+      <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 p-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">Import harvested files</div>
+        <p className="mt-1 text-[11px] text-muted">Select one or more <span className="tabular">data/inec/*.json</span> files produced by the harvest script.</p>
+        <input ref={fileRef} type="file" accept=".json,application/json" multiple disabled={!!busy}
+          onChange={(e) => importFiles(e.target.files)}
+          className="mt-2 block w-full text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white" />
+        {busy && <div className="mt-2 text-[11px] text-muted">Importing {busy}…</div>}
+      </div>
 
       {summary && (
         <div className="mb-3 grid grid-cols-4 gap-2 text-center">
