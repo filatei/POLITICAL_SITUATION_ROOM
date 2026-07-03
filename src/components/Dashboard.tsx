@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, logout } from "@/lib/session";
 import { getSocket } from "@/lib/socket";
 import PartyBadge from "@/components/PartyBadge";
+import AiChat from "@/components/AiChat";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import type { Session } from "@/lib/auth";
 
@@ -421,13 +422,11 @@ export default function Dashboard({ session }: { session: Session }) {
               <button className="text-xs text-accent underline" onClick={loadSummary}>Refresh</button>
             </div>
             <div className="whitespace-pre-wrap text-sm text-ink">{summary || "No summary yet."}</div>
-            <div className="mt-3 border-t border-line pt-3">
-              <div className="flex gap-2">
-                <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask about the data…" onKeyDown={(e) => e.key === "Enter" && ask()} />
-                <button className="btn-primary" disabled={asking} onClick={ask}>{asking ? "…" : "Ask"}</button>
-              </div>
-              {answer && <div className="mt-2 whitespace-pre-wrap rounded-lg bg-panel p-3 text-sm">{answer}</div>}
-            </div>
+          </div>
+
+          <div className="card p-4">
+            <h2 className="mb-2 text-sm font-semibold">Ask the assistant</h2>
+            <AiChat compact />
           </div>
         </section>
       </main>

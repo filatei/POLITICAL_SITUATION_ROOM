@@ -301,6 +301,20 @@ model AuditLog {
   @@index([entity, entityId])
 }
 
+// AI knowledge base: chunks of the Electoral Act, the app guide, structure facts,
+// etc. Retrieved by keyword and fed to the assistant as grounding context.
+model KnowledgeChunk {
+  id        String   @id @default(cuid())
+  source    String   // "electoral-act-2022" | "app-guide" | "electoral-structure"
+  section   String?  // "Section 51", "Part V", "3.2"
+  title     String
+  content   String
+  ord       Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([source])
+}
+
 enum InstructionStatus {
   SENT
   DELIVERED

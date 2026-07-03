@@ -27,7 +27,7 @@ export default function QrModal({ code, label, onClose, onCopy }: {
   }, [code]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div className="sheet-in card w-full max-w-sm space-y-4 p-6 text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wide text-muted">Access code</h2>

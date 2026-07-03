@@ -4,6 +4,7 @@ import { api, logout } from "@/lib/session";
 import RoomLogin from "@/components/RoomLogin";
 import QrModal from "@/components/QrModal";
 import ThemeToggle from "@/components/ThemeToggle";
+import AiChat from "@/components/AiChat";
 import type { Session } from "@/lib/auth";
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
@@ -242,7 +243,8 @@ function Console({ session }: { session: Session }) {
           </div>
           <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-1">
             {filteredAgents.map((a) => (
-              <div key={a.id} className="rounded-lg border border-line p-3">
+              <div key={a.id} onClick={() => { if (edit?.id !== a.id) setOpenAgent(a.id); }}
+                className="cursor-pointer rounded-lg border border-line p-3 transition hover:border-accent/40 hover:bg-ink/5" title="Open code details">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{a.name}</div>
@@ -258,7 +260,7 @@ function Console({ session }: { session: Session }) {
                 </div>
 
                 {edit?.id === a.id ? (
-                  <div className="mt-2 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-2">
+                  <div className="mt-2 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-2" onClick={(e) => e.stopPropagation()}>
                     <input className="input py-1 text-sm" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Recipient name" />
                     <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputMode="tel" placeholder="Recipient phone (optional)" />
                     <div className="flex gap-2">
@@ -268,8 +270,8 @@ function Console({ session }: { session: Session }) {
                   </div>
                 ) : (
                   <div className="mt-2 flex items-center justify-between gap-2">
-                    <button className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent hover:bg-accent/15" onClick={() => setOpenAgent(a.id)} title="Open code details">{a.inviteCode} ⧉</button>
-                    <div className="flex items-center gap-3 text-xs">
+                    <span className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent">{a.inviteCode} ⧉</span>
+                    <div className="flex items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
                       <button className="text-muted hover:text-ink" onClick={() => setEdit({ id: a.id, name: a.name, phone: a.phone || "" })}>Assign</button>
                       <button className="text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
                     </div>
@@ -284,6 +286,13 @@ function Console({ session }: { session: Session }) {
 
       <div className="space-y-4 p-5 pt-0">
         <GeoConsole onFlash={setFlash} onOpenAgent={(id) => setOpenAgent(id)} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="card p-5">
+            <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">AI assistant — Act, app & field data</h2>
+            <AiChat />
+          </section>
+          {session.role === "ADMIN" && <KnowledgeCard onFlash={setFlash} />}
+        </div>
         <TallyOverride units={units} onFlash={setFlash} />
         {session.role === "ADMIN" && <StaffUsers onFlash={setFlash} />}
       </div>
@@ -739,5 +748,71 @@ function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; 
         )}
       </div>
     </div>
+  );
+}
+
+/* -------- AI knowledge base: load the Electoral Act & curated facts -------- */
+function KnowledgeCard({ onFlash }: { onFlash: (s: string) => void }) {
+  const [sources, setSources] = useState<{ source: string; chunks: number }[]>([]);
+  const [text, setText] = useState("");
+  const [src, setSrc] = useState("electoral-act-2022-full");
+  const [busy, setBusy] = useState(false);
+
+  async function load() { const r = await api("/api/admin/knowledge"); if (r.ok) setSources((await r.json()).sources); }
+  useEffect(() => { load(); }, []);
+
+  async function seed() {
+    setBusy(true);
+    const r = await api("/api/admin/knowledge", { method: "POST", body: JSON.stringify({ mode: "seed" }) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { onFlash(`Loaded ${j.added} curated entries`); load(); } else onFlash(j.error || "Failed");
+  }
+  async function loadAct() {
+    setBusy(true);
+    const r = await api("/api/admin/knowledge", { method: "POST", body: JSON.stringify({ mode: "seed-act-file" }) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { onFlash(`Indexed full Electoral Act 2026 — ${j.added} chunks`); load(); } else onFlash(j.error || "Failed");
+  }
+  async function importText() {
+    if (!text.trim()) return;
+    setBusy(true);
+    const r = await api("/api/admin/knowledge", { method: "POST", body: JSON.stringify({ source: src, text }) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok) { onFlash(`Imported ${j.added} chunks into ${j.source}`); setText(""); load(); } else onFlash(j.error || "Failed");
+  }
+  async function del(source: string) {
+    const r = await api(`/api/admin/knowledge?source=${encodeURIComponent(source)}`, { method: "DELETE" });
+    if (r.ok) { onFlash(`Removed ${source}`); load(); }
+  }
+
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">AI knowledge base</h2>
+      <p className="mb-3 text-[11px] text-muted">The assistant answers legal questions from this base. Load the curated summaries, and paste the full Electoral Act text for verbatim, section-accurate answers.</p>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <button className="btn-primary text-xs" disabled={busy} onClick={loadAct}>Load full Electoral Act 2026 (bundled)</button>
+        <button className="btn-ghost text-xs" disabled={busy} onClick={seed}>Load curated summaries + app guide</button>
+      </div>
+
+      {sources.length > 0 && (
+        <div className="mb-3 space-y-1">
+          {sources.map((s) => (
+            <div key={s.source} className="flex items-center justify-between rounded-md border border-line px-2 py-1 text-xs">
+              <span><b>{s.source}</b> · {s.chunks} chunk{s.chunks === 1 ? "" : "s"}</span>
+              <button className="text-muted hover:text-bad" onClick={() => del(s.source)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <label className="label">Import full document text</label>
+      <input className="input mb-2" value={src} onChange={(e) => setSrc(e.target.value)} placeholder="source name e.g. electoral-act-2022-full" />
+      <textarea className="input min-h-28" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the full Electoral Act 2022 text here (or any reference doc). It's chunked and stored for the assistant." />
+      <button className="btn-primary mt-2 w-full" disabled={busy || !text.trim()} onClick={importText}>{busy ? "Importing…" : "Import & index"}</button>
+    </section>
   );
 }
