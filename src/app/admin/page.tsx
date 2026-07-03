@@ -155,9 +155,12 @@ function Console({ session }: { session: Session }) {
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface/80 px-5 py-3.5 backdrop-blur-md">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin</div>
-          <div className="text-lg font-bold tracking-tight">{tabTitle[tab]}</div>
+        <div className="flex items-center gap-3">
+          <img src="/psr-logo.png" alt="PSR" className="h-7 w-auto max-w-[110px] shrink-0 object-contain" />
+          <div className="border-l border-line pl-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin</div>
+            <div className="text-lg font-bold tracking-tight">{tabTitle[tab]}</div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -873,7 +876,23 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   const [log, setLog] = useState<string[]>([]);
   const [coverage, setCoverage] = useState<any>(null);
   const [replaceMode, setReplaceMode] = useState(false);
+  const [saved, setSaved] = useState<{ state: string; units: number }[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function loadSaved() {
+    const r = await api("/api/admin/geo/rebuild");
+    if (r.ok) setSaved((await r.json()).saved || []);
+  }
+
+  async function rebuild() {
+    if (!window.confirm(`Rebuild the warehouse from ${saved.length} server-side backup(s)? This re-applies every saved state.`)) return;
+    setBusy("rebuild");
+    const r = await api("/api/admin/geo/rebuild", { method: "POST" });
+    const j = await r.json();
+    setBusy(null);
+    if (r.ok) { setSummary(j.summary); setLog((l) => [`↻ Rebuilt from backups — ${j.result.states} states · ${j.result.units.toLocaleString()} units`, ...l].slice(0, 80)); onFlash(`Rebuilt ${j.result.states} states from backups`); }
+    else onFlash(j.error || "Rebuild failed");
+  }
 
   async function checkCoverage() {
     setBusy("coverage");
@@ -896,7 +915,7 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
     const r = await api("/api/admin/geo/harvest");
     if (r.ok) { const j = await r.json(); setStates(j.states); setSummary(j.summary); }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadSaved(); }, []);
 
   // Import harvested JSON files (from scripts/harvest-inec.mjs) — the server can't
   // reach INEC, so we upload the files harvested on a laptop.
@@ -925,6 +944,7 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
     }
     setBusy(null);
     if (fileRef.current) fileRef.current.value = "";
+    loadSaved();
   }
 
   async function harvest(state: string) {
@@ -986,7 +1006,11 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
           {busy ? `Working ${busy}…` : "Harvest all 37 states"}
         </button>
         <button className="btn-ghost text-xs" disabled={!!busy} onClick={checkCoverage}>Check coverage (37 / 774)</button>
+        {saved.length > 0 && <button className="btn-ghost text-xs" disabled={!!busy} onClick={rebuild}>Rebuild from saved ({saved.length})</button>}
       </div>
+      {saved.length > 0 && (
+        <p className="mb-3 text-[11px] text-muted">💾 {saved.length} state{saved.length === 1 ? "" : "s"} backed up on the server ({saved.reduce((n, s) => n + s.units, 0).toLocaleString()} units) — you can rebuild the warehouse from these without re-uploading files.</p>
+      )}
 
       {coverage && (
         <div className="mb-3 rounded-lg border border-line bg-surface p-3 text-[11px]">

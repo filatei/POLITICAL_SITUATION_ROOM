@@ -155,7 +155,31 @@ export async function importUnits(stateName: string, rows: RawUnit[], replace = 
     }
   }
 
+  // Back up the raw file server-side so the warehouse can be rebuilt without re-upload.
+  await db.geoImport.upsert({
+    where: { state },
+    update: { units: unitCount, payload: rows as any },
+    create: { state, units: unitCount, payload: rows as any },
+  });
+
   return { state, lgas: byLga.size, wards: wardCount, units: unitCount, ms: Date.now() - started };
+}
+
+// List the server-side backups (one per imported state).
+export async function savedImports() {
+  return db.geoImport.findMany({ select: { state: true, units: true, importedAt: true }, orderBy: { state: "asc" } });
+}
+
+// Rebuild the whole warehouse from the server-side backups (no file re-upload).
+export async function rebuildFromSaved(): Promise<{ states: number; units: number }> {
+  const saved = await db.geoImport.findMany();
+  let units = 0;
+  for (const s of saved) {
+    const rows = ((s.payload as unknown) as RawUnit[]) || [];
+    const res = await importUnits(s.state, rows, true); // clean rebuild per state
+    units += res.units;
+  }
+  return { states: saved.length, units };
 }
 
 // Wipe ALL warehoused geography. Detaches agent + submission unit references first

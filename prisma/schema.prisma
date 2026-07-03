@@ -182,6 +182,15 @@ model PollingUnit {
   @@index([stateId])
 }
 
+// Server-side backup of each imported harvest file, so the warehouse can be
+// rebuilt (State/Lga/Ward/PollingUnit) without re-uploading files from a laptop.
+model GeoImport {
+  state      String   @id // uppercase state name
+  units      Int      @default(0)
+  payload    Json // the harvested rows: [{ id, pu, delim, lga, ward }]
+  importedAt DateTime @updatedAt
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
