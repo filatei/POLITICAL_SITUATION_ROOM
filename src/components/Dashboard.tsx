@@ -317,7 +317,7 @@ export default function Dashboard({ session }: { session: Session }) {
                       <div className="truncate text-sm font-semibold">{g.unit}</div>
                       <div className="text-[11px] text-muted">{fmt(it.receivedAt)} · {it.confidence || "—"} · {g.count} report{g.count === 1 ? "" : "s"}</div>
                     </div>
-                    <span className={`pill shrink-0 ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus}</span>
+                    <span className={`pill shrink-0 ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus === "VERIFIED" ? "ACCEPTED" : it.scoreStatus}</span>
                   </div>
                   {(() => {
                     const nz = [...(it.scores || [])].filter((s) => s.votes > 0).sort((a, b) => b.votes - a.votes || a.party.localeCompare(b.party));
@@ -346,7 +346,7 @@ export default function Dashboard({ session }: { session: Session }) {
                   )}
                   {canVerify && (
                     <div className="mt-2 flex items-center justify-end gap-3 text-xs">
-                      {it.scoreStatus !== "VERIFIED" && <button className="font-semibold text-good underline" onClick={() => verify(it.id, "VERIFIED")}>Verify</button>}
+                      {it.scoreStatus !== "VERIFIED" && <button className="font-semibold text-good underline" onClick={() => verify(it.id, "VERIFIED")}>Accept</button>}
                       {it.scoreStatus !== "DISPUTED" && <button className="font-semibold text-bad underline" onClick={() => verify(it.id, "DISPUTED")}>Dispute</button>}
                     </div>
                   )}

@@ -293,6 +293,7 @@ function Console({ session }: { session: Session }) {
           </section>
           {session.role === "ADMIN" && <KnowledgeCard onFlash={setFlash} />}
         </div>
+        {session.role === "ADMIN" && <BillingCard onFlash={setFlash} />}
         <TallyOverride units={units} onFlash={setFlash} />
         {session.role === "ADMIN" && <StaffUsers onFlash={setFlash} />}
       </div>
@@ -813,6 +814,85 @@ function KnowledgeCard({ onFlash }: { onFlash: (s: string) => void }) {
       <input className="input mb-2" value={src} onChange={(e) => setSrc(e.target.value)} placeholder="source name e.g. electoral-act-2022-full" />
       <textarea className="input min-h-28" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the full Electoral Act 2022 text here (or any reference doc). It's chunked and stored for the assistant." />
       <button className="btn-primary mt-2 w-full" disabled={busy || !text.trim()} onClick={importText}>{busy ? "Importing…" : "Import & index"}</button>
+    </section>
+  );
+}
+
+/* -------- Billing: seat calculator + Paystack / Squad checkout -------- */
+type SeatStatus = { freeSeats: number; paidSeats: number; total: number; used: number; available: number; priceNaira: number; providers: { paystack: boolean; squad: boolean } };
+
+function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
+  const [st, setSt] = useState<SeatStatus | null>(null);
+  const [units, setUnits] = useState("");
+  const [perUnit, setPerUnit] = useState("1");
+  const [buy, setBuy] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() { const r = await api("/api/billing/status"); if (r.ok) setSt(await r.json()); }
+  useEffect(() => { load(); }, []);
+
+  const PRICE = st?.priceNaira ?? 1000;
+  const free = st?.freeSeats ?? 10;
+  const seats = (Number(units) || 0) * (Number(perUnit) || 0);
+  const billable = Math.max(0, seats - free);
+  const planCost = billable * PRICE;
+  const shortfall = st ? Math.max(0, seats - st.total) : 0;
+
+  async function checkout(provider: "PAYSTACK" | "SQUAD") {
+    const n = Math.max(1, Math.round(Number(buy) || shortfall || billable));
+    if (!email.trim()) { onFlash("Enter a billing email."); return; }
+    setBusy(true);
+    const r = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ provider, seats: n, email }) });
+    setBusy(false);
+    const j = await r.json();
+    if (r.ok && j.url) { window.location.href = j.url; }
+    else onFlash(j.error || "Checkout failed");
+  }
+
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Seats &amp; billing</h2>
+      <p className="mb-3 text-[11px] text-muted">A seat = one agent code. First {free} are free to trial; extra seats are ₦{PRICE.toLocaleString()} each, one-off for this election.</p>
+
+      {st && (
+        <div className="mb-4 grid grid-cols-4 gap-2 text-center">
+          <div className="rounded-lg border border-line p-2"><div className="tabular text-lg font-bold">{st.used}</div><div className="text-[10px] uppercase text-muted">Used</div></div>
+          <div className="rounded-lg border border-line p-2"><div className="tabular text-lg font-bold text-good">{st.available}</div><div className="text-[10px] uppercase text-muted">Available</div></div>
+          <div className="rounded-lg border border-line p-2"><div className="tabular text-lg font-bold">{st.freeSeats}</div><div className="text-[10px] uppercase text-muted">Free</div></div>
+          <div className="rounded-lg border border-line p-2"><div className="tabular text-lg font-bold">{st.paidSeats}</div><div className="text-[10px] uppercase text-muted">Paid</div></div>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Calculator */}
+        <div>
+          <label className="label">Plan calculator</label>
+          <div className="grid grid-cols-2 gap-2">
+            <div><span className="text-[11px] text-muted">Units to cover</span><input className="input tabular" inputMode="numeric" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 200" /></div>
+            <div><span className="text-[11px] text-muted">Agents / unit</span><input className="input tabular" inputMode="numeric" value={perUnit} onChange={(e) => setPerUnit(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1" /></div>
+          </div>
+          <div className="mt-3 rounded-lg border border-line bg-white/[0.03] p-3 text-sm">
+            <div className="flex justify-between"><span className="text-muted">Total agents (seats)</span><b className="tabular">{seats.toLocaleString()}</b></div>
+            <div className="flex justify-between"><span className="text-muted">Free</span><span className="tabular">-{Math.min(seats, free)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Billable seats</span><b className="tabular">{billable.toLocaleString()}</b></div>
+            <div className="mt-1 flex justify-between border-t border-line pt-1 text-base"><span className="font-semibold">One-off cost</span><b className="tabular text-accent">₦{planCost.toLocaleString()}</b></div>
+          </div>
+        </div>
+
+        {/* Checkout */}
+        <div>
+          <label className="label">Buy seats</label>
+          <input className="input mb-2 tabular" inputMode="numeric" value={buy} onChange={(e) => setBuy(e.target.value.replace(/[^0-9]/g, ""))} placeholder={`Seats to buy${shortfall ? ` (need ${shortfall} more)` : ""}`} />
+          <input className="input mb-2" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="Billing email (receipt)" />
+          <div className="text-[11px] text-muted">Amount: <b className="tabular text-ink">₦{((Math.max(1, Number(buy) || shortfall || billable)) * PRICE).toLocaleString()}</b></div>
+          <div className="mt-2 flex gap-2">
+            <button className="btn-primary flex-1" disabled={busy || !st?.providers.paystack} onClick={() => checkout("PAYSTACK")} title={st?.providers.paystack ? "" : "Set PAYSTACK_SECRET_KEY"}>Pay with Paystack</button>
+            <button className="btn-ghost flex-1" disabled={busy || !st?.providers.squad} onClick={() => checkout("SQUAD")} title={st?.providers.squad ? "" : "Set SQUAD_SECRET_KEY"}>Pay with Squad</button>
+          </div>
+          {st && !st.providers.paystack && !st.providers.squad && <p className="mt-2 text-[11px] text-warn">No payment provider configured yet (set PAYSTACK_SECRET_KEY and/or SQUAD_SECRET_KEY).</p>}
+        </div>
+      </div>
     </section>
   );
 }

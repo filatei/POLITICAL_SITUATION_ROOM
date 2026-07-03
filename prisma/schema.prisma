@@ -96,6 +96,7 @@ model Election {
   agents       Agent[]
   submissions  Submission[]
   instructions Instruction[]
+  subscription Subscription?
 }
 
 model Party {
@@ -299,6 +300,36 @@ model AuditLog {
   at        DateTime @default(now())
 
   @@index([entity, entityId])
+}
+
+enum PaymentProvider { PAYSTACK SQUAD }
+enum PaymentStatus { PENDING PAID FAILED }
+
+// One subscription per election: 10 free seats to trial, plus purchased seats.
+// A "seat" = one agent code. Available = freeSeats + paidSeats - codes created.
+model Subscription {
+  id         String   @id @default(cuid())
+  electionId String   @unique
+  election   Election @relation(fields: [electionId], references: [id])
+  freeSeats  Int      @default(10)
+  paidSeats  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Payment {
+  id         String          @id @default(cuid())
+  reference  String          @unique
+  provider   PaymentProvider
+  electionId String?
+  seats      Int
+  amount     Int             // in kobo
+  email      String?
+  status     PaymentStatus   @default(PENDING)
+  meta       Json?
+  createdAt  DateTime        @default(now())
+
+  @@index([status])
 }
 
 // AI knowledge base: chunks of the Electoral Act, the app guide, structure facts,
