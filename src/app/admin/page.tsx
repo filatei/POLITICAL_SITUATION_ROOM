@@ -698,7 +698,7 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
                 <span className="shrink-0 text-[11px] text-muted">{s.lgas} LGAs · {s.wards} wards · {s.units.toLocaleString()} units</span>
               </button>
               {openS[s.id] && (
-                <div className="border-t border-line/60 pl-3">
+                <div className="ml-5 border-l-2 border-line/60 border-t pl-3">
                   {(lgasBy[s.id] || []).map((l) => (
                     <div key={l.id}>
                       <button onClick={() => toggleLga(l)} className="flex w-full items-center justify-between gap-2 py-1.5 pr-3 text-left text-sm hover:bg-ink/5">
@@ -706,7 +706,7 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
                         <span className="shrink-0 text-[11px] text-muted">{l.wards} wards · {l.units} units</span>
                       </button>
                       {openL[l.id] && (
-                        <div className="pl-4">
+                        <div className="ml-5 border-l-2 border-line/40 pl-3">
                           {(wardsBy[l.id] || []).map((w) => (
                             <div key={w.id}>
                               <button onClick={() => toggleWard(w)} className="flex w-full items-center justify-between gap-2 py-1.5 pr-3 text-left text-sm hover:bg-ink/5">
@@ -714,7 +714,7 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
                                 <span className="shrink-0 text-[11px] text-muted">{w.units} units{w.codes ? ` · ${w.codes} codes` : ""}</span>
                               </button>
                               {openW[w.id] && (
-                                <div className="grid gap-1 py-1 pl-6 sm:grid-cols-2">
+                                <div className="ml-5 grid gap-1 border-l-2 border-line/30 py-1 pl-3 sm:grid-cols-2">
                                   {(unitsBy[w.id] || []).map((u) => (
                                     <button key={u.id} onClick={() => openUnit(u)} className="flex items-center justify-between gap-2 rounded-md border border-line/60 px-2 py-1 text-left text-[13px] hover:border-accent/40 hover:bg-ink/5">
                                       <span className="truncate">{u.name}</span>
