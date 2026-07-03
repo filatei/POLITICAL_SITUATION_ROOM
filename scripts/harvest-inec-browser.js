@@ -56,13 +56,15 @@
     }));
   }
 
-  function download(state, payload) {
+  // One download at the end (a single blob) — Chrome silently blocks repeated
+  // auto-downloads, so we accumulate all states and download once.
+  function downloadFile(name, payload) {
     const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = state.replace(/\s+/g, "_") + ".json";
+    a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 8000);
   }
 
   async function harvestState(state) {
@@ -104,20 +106,24 @@
       if (still.length) console.warn(`${state}: ${still.length} wards still failed — file saved anyway, re-run to fill gaps`);
     }
     const payload = { state, harvestedAt: new Date().toISOString(), lgas: lgas.length, wards, count: units.length, units };
-    download(state, payload);
-    console.log(`✓ ${state}: ${lgas.length} LGAs · ${wards} wards · ${units.length} units → downloaded (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+    console.log(`✓ ${state}: ${lgas.length} LGAs · ${wards} wards · ${units.length} units (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     return payload;
   }
 
   window.INEC = {
     STATES,
+    store: [],
     async run(list) {
       const targets = (list && list.length ? list : STATES).map((s) => s.toUpperCase());
       console.log(`%cINEC harvest starting: ${targets.length} state(s)`, "color:#26a65b;font-weight:bold");
+      const store = [];
       for (const s of targets) {
-        try { await harvestState(s); } catch (e) { console.error(`✗ ${s}: ${e.message} — re-run INEC.run(["${s}"]) to retry`); }
+        try { store.push(await harvestState(s)); } catch (e) { console.error(`✗ ${s}: ${e.message} — re-run INEC.run(["${s}"]) to retry`); }
       }
-      console.log("%cDone. Upload the downloaded *.json files in PSR admin → Polling-unit warehouse.", "color:#26a65b;font-weight:bold");
+      this.store = store;
+      const name = store.length === 1 ? store[0].state.replace(/\s+/g, "_") + ".json" : "NIGERIA-INEC-all.json";
+      downloadFile(name, store.length === 1 ? store[0] : { harvestedAt: new Date().toISOString(), count: store.reduce((n, s) => n + s.count, 0), states: store });
+      console.log(`%cDone — downloaded ${name}. Upload it in PSR admin → Polling-unit warehouse.`, "color:#26a65b;font-weight:bold");
     },
   };
   console.log("%cINEC harvester ready. Run:  INEC.run()   (all)   or   INEC.run([\"ONDO\"])", "color:#26a65b;font-weight:bold");

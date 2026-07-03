@@ -4,7 +4,6 @@ import { useState } from "react";
 export default function ContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -13,10 +12,10 @@ export default function ContactForm() {
   async function send() {
     setBusy(true); setErr("");
     try {
-      const r = await fetch("/api/public/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, subject, message }) });
+      const r = await fetch("/api/public/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, message }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Failed");
-      setDone(true); setName(""); setEmail(""); setSubject(""); setMessage("");
+      setDone(true); setName(""); setEmail(""); setMessage("");
     } catch (e: any) { setErr(String(e.message || e)); }
     finally { setBusy(false); }
   }
@@ -37,7 +36,6 @@ export default function ContactForm() {
         <div><label className="label">Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" /></div>
         <div><label className="label">Email</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="you@example.com" /></div>
       </div>
-      <div className="mt-3"><label className="label">Subject (optional)</label><input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="How can we help?" /></div>
       <div className="mt-3"><label className="label">Message</label><textarea className="input min-h-28" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Tell us about your election / tenancy needs…" /></div>
       <button className="btn-primary mt-3 w-full sm:w-auto" disabled={busy || !name.trim() || !email.trim() || !message.trim()} onClick={send}>{busy ? "Sending…" : "Send message"}</button>
     </div>

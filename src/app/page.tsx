@@ -186,12 +186,9 @@ export default async function Home() {
         <div className="mx-auto grid max-w-6xl gap-8 px-5 py-16 lg:grid-cols-2">
           <div>
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Contact us</h2>
-            <p className="mt-2 text-muted">Setting up a monitoring room for your election, or want a white-label tenancy? Send us a note.</p>
-            <div className="mt-6 space-y-1 text-sm">
-              <div className="font-semibold text-ink">TORAMA GLOBAL SERVICES LTD</div>
-              <div className="text-muted">No. 1, KM 7 (Zipcode 560213), Tonbia–Amasoma Road,<br />Yenagoa, Bayelsa State, Nigeria</div>
+            <p className="mt-2 text-muted">Setting up a monitoring room for your election, or want a white-label tenancy? Send us a note and we&apos;ll get back to you.</p>
+            <div className="mt-6 text-sm">
               <div className="text-muted">Email: <a className="text-accent hover:underline" href="mailto:psr@torama.money">psr@torama.money</a></div>
-              <div className="text-muted">Web: <a className="text-accent hover:underline" href="https://torama.money" target="_blank" rel="noreferrer">torama.money</a></div>
             </div>
           </div>
           <ContactForm />

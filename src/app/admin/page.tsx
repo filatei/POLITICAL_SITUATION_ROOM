@@ -43,6 +43,8 @@ export default function AdminPage() {
   return <Console session={session!} />;
 }
 
+type AdminTab = "codes" | "geo" | "results" | "ai" | "billing" | "settings";
+
 function Console({ session }: { session: Session }) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [lgas, setLgas] = useState<Lga[]>([]);
@@ -136,12 +138,25 @@ function Console({ session }: { session: Session }) {
     URL.revokeObjectURL(url);
   }
 
+  const isAdmin = session.role === "ADMIN";
+  const TABS: { key: AdminTab; label: string }[] = [
+    { key: "codes", label: "Agents & Codes" },
+    { key: "geo", label: "Geography" },
+    { key: "results", label: "Results" },
+    { key: "ai", label: "AI & Knowledge" },
+    ...(isAdmin ? [{ key: "billing" as const, label: "Billing" }, { key: "settings" as const, label: "Settings" }] : []),
+  ];
+  const tabTitle: Record<AdminTab, string> = {
+    codes: "Agents & access codes", geo: "Geography warehouse", results: "Results & tally",
+    ai: "AI & knowledge base", billing: "Seats & billing", settings: "Branding & staff",
+  };
+
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface/80 px-5 py-3.5 backdrop-blur-md">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin</div>
-          <div className="text-lg font-bold tracking-tight">Agents & access codes</div>
+          <div className="text-lg font-bold tracking-tight">{tabTitle[tab]}</div>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -149,8 +164,18 @@ function Console({ session }: { session: Session }) {
         </div>
       </header>
 
+      <nav className="sticky top-[57px] z-[9] flex gap-1 overflow-x-auto border-b border-line bg-surface/85 px-3 py-2 backdrop-blur-md">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`shrink-0 rounded-lg px-3.5 py-2 text-sm font-semibold transition ${tab === t.key ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted hover:text-ink"}`}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
       {flash && <div className="mx-5 mt-4 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm">{flash}</div>}
 
+      {tab === "codes" && (
       <main className="grid gap-4 p-5 lg:grid-cols-3">
         {/* Create one agent */}
         <section className="card p-5">
@@ -283,22 +308,41 @@ function Console({ session }: { session: Session }) {
           </div>
         </section>
       </main>
+      )}
 
-      <div className="space-y-4 p-5 pt-0">
-        <GeoConsole onFlash={setFlash} onOpenAgent={(id) => setOpenAgent(id)} />
-        <div className="grid gap-4 lg:grid-cols-2">
+      {tab === "geo" && (
+        <div className="space-y-4 p-5">
+          <GeoConsole onFlash={setFlash} onOpenAgent={(id) => setOpenAgent(id)} />
+          {isAdmin && <WarehouseCard onFlash={setFlash} />}
+        </div>
+      )}
+
+      {tab === "results" && (
+        <div className="space-y-4 p-5">
+          <TallyOverride units={units} onFlash={setFlash} />
+        </div>
+      )}
+
+      {tab === "ai" && (
+        <div className="grid gap-4 p-5 lg:grid-cols-2">
           <section className="card p-5">
             <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">AI assistant — Act, app & field data</h2>
             <AiChat />
           </section>
-          {session.role === "ADMIN" && <KnowledgeCard onFlash={setFlash} />}
+          {isAdmin && <KnowledgeCard onFlash={setFlash} />}
         </div>
-        {session.role === "ADMIN" && <WarehouseCard onFlash={setFlash} />}
-        {session.role === "ADMIN" && <BillingCard onFlash={setFlash} />}
-        {session.role === "ADMIN" && <BrandingCard onFlash={setFlash} />}
-        <TallyOverride units={units} onFlash={setFlash} />
-        {session.role === "ADMIN" && <StaffUsers onFlash={setFlash} />}
-      </div>
+      )}
+
+      {tab === "billing" && isAdmin && (
+        <div className="space-y-4 p-5"><BillingCard onFlash={setFlash} /></div>
+      )}
+
+      {tab === "settings" && isAdmin && (
+        <div className="space-y-4 p-5">
+          <BrandingCard onFlash={setFlash} />
+          <StaffUsers onFlash={setFlash} />
+        </div>
+      )}
 
       {qr && <QrModal code={qr.code} label={qr.label} onClose={() => setQr(null)} onCopy={copyText} />}
       {openAgent && <AgentDetailModal id={openAgent} onClose={() => { setOpenAgent(null); load(); }} onFlash={setFlash} onQr={(code, label) => setQr({ code, label })} onCopy={copyText} />}
@@ -839,20 +883,24 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   async function importFiles(files: FileList | null) {
     if (!files || !files.length) return;
     for (const f of Array.from(files)) {
-      setBusy(f.name);
       try {
         const json = JSON.parse(await f.text());
-        const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: json.state, units: json.units }) });
-        const j = await r.json();
-        if (r.ok) {
-          setLog((l) => [`✓ ${j.result.state}: ${j.result.lgas} LGAs · ${j.result.wards} wards · ${j.result.units} units imported (${(j.result.ms / 1000).toFixed(0)}s)`, ...l].slice(0, 60));
-          setSummary(j.summary);
-          onFlash(`${j.result.state} imported — ${j.result.units} units`);
-        } else {
-          setLog((l) => [`✗ ${f.name}: ${j.error || "failed"}`, ...l].slice(0, 60));
+        // A combined file has { states:[{state,units},…] }; a single file is { state, units }.
+        const parts: { state: string; units: any[] }[] = Array.isArray(json.states) ? json.states : [{ state: json.state, units: json.units }];
+        for (const p of parts) {
+          setBusy(p.state || f.name);
+          const r = await api("/api/admin/geo/import", { method: "POST", body: JSON.stringify({ state: p.state, units: p.units }) });
+          const j = await r.json();
+          if (r.ok) {
+            setLog((l) => [`✓ ${j.result.state}: ${j.result.lgas} LGAs · ${j.result.wards} wards · ${j.result.units} units imported (${(j.result.ms / 1000).toFixed(0)}s)`, ...l].slice(0, 80));
+            setSummary(j.summary);
+            onFlash(`${j.result.state} imported — ${j.result.units} units`);
+          } else {
+            setLog((l) => [`✗ ${p.state || f.name}: ${j.error || "failed"}`, ...l].slice(0, 80));
+          }
         }
       } catch (e: any) {
-        setLog((l) => [`✗ ${f.name}: ${e?.message || "parse error"}`, ...l].slice(0, 60));
+        setLog((l) => [`✗ ${f.name}: ${e?.message || "parse error"}`, ...l].slice(0, 80));
       }
     }
     setBusy(null);
@@ -904,7 +952,7 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
 
       <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 p-3">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">Import harvested files</div>
-        <p className="mt-1 text-[11px] text-muted">Select one or more <span className="tabular">&lt;STATE&gt;.json</span> files downloaded by the browser harvester.</p>
+        <p className="mt-1 text-[11px] text-muted">Select the combined <span className="tabular">NIGERIA-INEC-all.json</span> (all states) or one/more <span className="tabular">&lt;STATE&gt;.json</span> files from the browser harvester.</p>
         <input ref={fileRef} type="file" accept=".json,application/json" multiple disabled={!!busy}
           onChange={(e) => importFiles(e.target.files)}
           className="mt-2 block w-full text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white" />
