@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, logout } from "@/lib/session";
 import { getSocket } from "@/lib/socket";
 import PartyBadge from "@/components/PartyBadge";
-import ThemeToggle from "@/components/ThemeToggle";
+import { getTheme, setTheme, type Theme } from "@/lib/theme";
 import type { Session } from "@/lib/auth";
 
 type Score = { party: string; color: string; votes: number };
@@ -183,6 +183,14 @@ export default function Dashboard({ session }: { session: Session }) {
     [tally]
   );
 
+  const [menu, setMenu] = useState(false);
+  const [mtab, setMtab] = useState<"tally" | "scores" | "activity">("scores");
+  const [themeName, setThemeName] = useState<Theme>("dark");
+  useEffect(() => { setThemeName(getTheme()); }, []);
+  function toggleTheme() { const n: Theme = themeName === "light" ? "dark" : "light"; setTheme(n); setThemeName(n); }
+  const initials = (session.name || "U").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+  const menuRow = "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-ink/5";
+
   return (
     <div className={big ? "bigscreen min-h-dvh" : "min-h-dvh"}>
       <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-5">
@@ -193,20 +201,58 @@ export default function Dashboard({ session }: { session: Session }) {
             <div className="truncate text-base font-bold tracking-tight sm:text-lg">{election?.name || "—"}</div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="flex shrink-0 items-center gap-2 text-sm">
           {tally && <span className="pill bg-white/5 text-ink">Rep. <b className="tabular text-ink">{tally.reporting.verified}/{tally.reporting.total}</b> · {reportPct}%</span>}
-          <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count} online</span>
-          <button className="btn-ghost px-2.5 py-1.5" title={soundOn ? "Mute score alerts" : "Unmute score alerts"} onClick={() => { setSoundOn((s) => !s); if (!soundOn) playChime(); }}>{soundOn ? "🔔" : "🔕"}</button>
-          {!big && <ThemeToggle />}
-          {!big && (session.role === "ADMIN" || session.role === "COORDINATOR") && <a href="/admin" className="btn-ghost px-3 py-1.5">Admin</a>}
-          <button className="btn-ghost hidden px-3 py-1.5 sm:inline-flex" onClick={() => setBig((b) => !b)}>{big ? "Exit big screen" : "Big screen"}</button>
-          {!big && <button className="text-xs text-muted hover:text-ink" onClick={async () => { await logout(); location.reload(); }}>Sign out</button>}
+          <span className="pill bg-good/10 text-good"><span className="h-1.5 w-1.5 rounded-full bg-good" /> {presence.count}</span>
+          <div className="relative">
+            <button onClick={() => setMenu((m) => !m)} aria-label="Account menu"
+              className="grid h-9 w-9 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent ring-1 ring-inset ring-accent/40">{initials}</button>
+            {menu && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
+                <div className="sheet-in absolute right-0 z-30 mt-2 w-60 origin-top-right rounded-xl border border-line bg-surface p-1.5 shadow-2xl">
+                  <div className="px-3 py-2">
+                    <div className="truncate text-sm font-semibold">{session.name}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-muted">{session.role}</div>
+                  </div>
+                  <div className="my-1 h-px bg-line" />
+                  <button className={menuRow} onClick={() => { setSoundOn((s) => !s); if (!soundOn) playChime(); }}>
+                    <span>Score alert sound</span><span className="text-muted">{soundOn ? "On 🔔" : "Off 🔕"}</span>
+                  </button>
+                  <button className={menuRow} onClick={toggleTheme}>
+                    <span>Appearance</span><span className="text-muted">{themeName === "light" ? "Light ☀︎" : "Dark ☾"}</span>
+                  </button>
+                  <button className={`${menuRow} hidden sm:flex`} onClick={() => { setBig((b) => !b); setMenu(false); }}>
+                    <span>{big ? "Exit big screen" : "Big screen"}</span><span className="text-muted">🖥</span>
+                  </button>
+                  {(session.role === "ADMIN" || session.role === "COORDINATOR") && (
+                    <a href="/admin" className={menuRow}><span>Admin console</span><span className="text-muted">→</span></a>
+                  )}
+                  <div className="my-1 h-px bg-line" />
+                  <button className={`${menuRow} text-bad`} onClick={async () => { await logout(); location.reload(); }}>
+                    <span>Sign out</span><span>⏻</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
+      {!big && (
+        <div className="sticky top-[56px] z-[9] flex gap-1 border-b border-line bg-surface/85 p-2 backdrop-blur-md lg:hidden">
+          {(["tally", "scores", "activity"] as const).map((t) => (
+            <button key={t} onClick={() => setMtab(t)}
+              className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold transition ${mtab === t ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted"}`}>
+              {t === "tally" ? "Tally" : t === "scores" ? "Scores" : "Incidents"}
+            </button>
+          ))}
+        </div>
+      )}
+
       <main className={`grid gap-4 p-4 ${big ? "grid-cols-2" : "lg:grid-cols-3"}`}>
         {/* Tally */}
-        <section className="card p-5">
+        <section className={`card p-5 ${mtab === "tally" ? "" : "hidden"} lg:block`}>
           <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted">Score tally</h2>
           <div className="space-y-4">
             {board.map((l) => (
@@ -242,7 +288,7 @@ export default function Dashboard({ session }: { session: Session }) {
         </section>
 
         {/* Scores by unit */}
-        <section className="card flex flex-col p-4">
+        <section className={`card flex-col p-4 ${mtab === "scores" ? "flex" : "hidden"} lg:flex`}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Scores by unit</h2>
             <span className="pill bg-white/5 text-muted">{scoreGroups.length} unit{scoreGroups.length === 1 ? "" : "s"}</span>
@@ -272,19 +318,22 @@ export default function Dashboard({ session }: { session: Session }) {
                     </div>
                     <span className={`pill shrink-0 ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus}</span>
                   </div>
-                  {!!it.scores?.length && (
-                    <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                      {[...it.scores].sort((a, b) => b.votes - a.votes || a.party.localeCompare(b.party)).map((s, i) => (
-                        <span key={i} className="flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] px-2 py-1.5">
-                          <PartyBadge code={s.party} color={s.color} size={22} />
-                          <span className="min-w-0 leading-tight">
-                            <span className="block text-xs font-bold">{s.party}</span>
-                            <span className="tabular block text-sm font-extrabold">{nf.format(s.votes)}</span>
+                  {(() => {
+                    const nz = [...(it.scores || [])].filter((s) => s.votes > 0).sort((a, b) => b.votes - a.votes || a.party.localeCompare(b.party));
+                    return nz.length ? (
+                      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                        {nz.map((s, i) => (
+                          <span key={i} className="flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] px-2 py-1.5">
+                            <PartyBadge code={s.party} color={s.color} size={22} />
+                            <span className="min-w-0 leading-tight">
+                              <span className="block text-xs font-bold">{s.party}</span>
+                              <span className="tabular block text-sm font-extrabold">{nf.format(s.votes)}</span>
+                            </span>
                           </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    ) : <p className="mt-2 text-xs text-muted">No votes recorded on this report.</p>;
+                  })()}
                   {!!it.media?.length && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {it.media.map((m, i) => m.mime.startsWith("video/")
@@ -308,7 +357,7 @@ export default function Dashboard({ session }: { session: Session }) {
         </section>
 
         {/* Activity (incidents + updates) + AI + instructions */}
-        <section className="space-y-4">
+        <section className={`space-y-4 ${mtab === "activity" ? "" : "hidden"} lg:block`}>
           <div className="card flex flex-col p-4">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Incidents &amp; updates</h2>
