@@ -34,9 +34,8 @@ export default async function Home() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             {brand.logoUrl
-              ? <img src={brand.logoUrl} alt="" className="h-7 w-7 rounded object-contain" />
-              : <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>}
-            <span className="font-bold tracking-tight">{brand.name}</span>
+              ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[132px] object-contain" />
+              : <><span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span><span className="font-bold tracking-tight">{brand.name}</span></>}
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Link href="/agent/login" className="btn-ghost px-3 py-1.5">Field agent</Link>
@@ -231,9 +230,8 @@ export default async function Home() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
               {brand.logoUrl
-                ? <img src={brand.logoUrl} alt="" className="h-6 w-6 rounded object-contain" />
-                : <span className="live-dot text-bad"><span className="block h-2 w-2 rounded-full bg-bad" /></span>}
-              <span className="text-sm font-bold">{brand.name}</span>
+                ? <img src={brand.logoUrl} alt={brand.name} className="h-6 w-auto max-w-[116px] object-contain" />
+                : <><span className="live-dot text-bad"><span className="block h-2 w-2 rounded-full bg-bad" /></span><span className="text-sm font-bold">{brand.name}</span></>}
             </div>
             <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted">
               <Link href="/terms" className="hover:text-ink">Terms</Link>

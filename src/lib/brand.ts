@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 
 export type Brand = { name: string; tagline: string; accent: string; accentRgb: string; logoUrl: string | null };
 
-const DEFAULTS = { name: "PSR", tagline: "Election situation room", accent: "#26a65b", logoUrl: "/psr-mark.svg" as string | null };
+const DEFAULTS = { name: "PSR", tagline: "Election situation room", accent: "#26a65b", logoUrl: "/psr-logo.png" as string | null };
 
 // Hex "#5b8cff" → "91 140 255" for the `--accent` CSS variable.
 export function hexToRgbTriplet(hex: string): string {

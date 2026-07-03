@@ -83,24 +83,48 @@ export function chunkText(text: string, maxLen = 1500): string[] {
 
 // On first boot, load the curated summaries + the bundled full Electoral Act 2026
 // so the assistant is grounded without any manual admin step.
+// Bundled legal documents auto-loaded into the knowledge base. Both are public —
+// the landing-page assistant (non-signed-in users) retrieves from these too.
+export const LEGAL_DOCS: { source: string; file: string; label: string }[] = [
+  { source: "electoral-act-2026", file: "electoral-act-2026.txt", label: "Electoral Act 2026" },
+  { source: "regulations-2026", file: "regulations-2026.txt", label: "INEC Regulations & Guidelines 2026" },
+];
+
+async function readLegalFile(file: string): Promise<string> {
+  for (const p of [`LEGAL/${file}`, `./LEGAL/${file}`]) {
+    try { return await readFile(path.join(process.cwd(), p), "utf8"); } catch { /* try next */ }
+  }
+  return "";
+}
+
+// Chunk a legal doc and (re)load it under its source. Returns chunks added.
+export async function loadLegalDoc(doc: { source: string; file: string; label: string }): Promise<number> {
+  const text = await readLegalFile(doc.file);
+  if (!text.trim()) return 0;
+  await db.knowledgeChunk.deleteMany({ where: { source: doc.source } });
+  const chunks = chunkText(text, 1500);
+  await db.knowledgeChunk.createMany({
+    data: chunks.map((content, i) => ({ source: doc.source, title: `${doc.label} — part ${i + 1}`, content, ord: i + 1 })),
+  });
+  return chunks.length;
+}
+
 export async function ensureKnowledgeSeeded(): Promise<{ seeded: boolean; chunks: number }> {
   const count = await db.knowledgeChunk.count();
-  if (count > 0) return { seeded: false, chunks: count };
+  // Backfill: if only the older content is present but the regulations were never
+  // loaded, load them without wiping the base.
+  if (count > 0) {
+    const hasRegs = await db.knowledgeChunk.count({ where: { source: "regulations-2026" } });
+    if (hasRegs === 0) {
+      const added = await loadLegalDoc(LEGAL_DOCS[1]);
+      return { seeded: added > 0, chunks: count + added };
+    }
+    return { seeded: false, chunks: count };
+  }
 
   await db.knowledgeChunk.createMany({ data: SEED_KNOWLEDGE });
   let added = SEED_KNOWLEDGE.length;
-
-  let text = "";
-  for (const p of ["LEGAL/electoral-act-2026.txt", "./LEGAL/electoral-act-2026.txt"]) {
-    try { text = await readFile(path.join(process.cwd(), p), "utf8"); break; } catch { /* try next */ }
-  }
-  if (text.trim()) {
-    const chunks = chunkText(text, 1500);
-    await db.knowledgeChunk.createMany({
-      data: chunks.map((content, i) => ({ source: "electoral-act-2026", title: `Electoral Act 2026 — part ${i + 1}`, content, ord: i + 1 })),
-    });
-    added += chunks.length;
-  }
+  for (const doc of LEGAL_DOCS) added += await loadLegalDoc(doc);
   return { seeded: true, chunks: added };
 }
 

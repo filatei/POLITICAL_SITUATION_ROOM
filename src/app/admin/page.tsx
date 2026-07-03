@@ -773,10 +773,10 @@ function KnowledgeCard({ onFlash }: { onFlash: (s: string) => void }) {
   }
   async function loadAct() {
     setBusy(true);
-    const r = await api("/api/admin/knowledge", { method: "POST", body: JSON.stringify({ mode: "seed-act-file" }) });
+    const r = await api("/api/admin/knowledge", { method: "POST", body: JSON.stringify({ mode: "seed-legal-docs" }) });
     setBusy(false);
     const j = await r.json();
-    if (r.ok) { onFlash(`Indexed full Electoral Act 2026 — ${j.added} chunks`); load(); } else onFlash(j.error || "Failed");
+    if (r.ok) { onFlash(`Indexed bundled legal docs — ${j.added} chunks`); load(); } else onFlash(j.error || "Failed");
   }
   async function importText() {
     if (!text.trim()) return;
@@ -797,7 +797,7 @@ function KnowledgeCard({ onFlash }: { onFlash: (s: string) => void }) {
       <p className="mb-3 text-[11px] text-muted">The assistant answers legal questions from this base. Load the curated summaries, and paste the full Electoral Act text for verbatim, section-accurate answers.</p>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button className="btn-primary text-xs" disabled={busy} onClick={loadAct}>Load full Electoral Act 2026 (bundled)</button>
+        <button className="btn-primary text-xs" disabled={busy} onClick={loadAct}>Load bundled legal docs (Act + Regulations 2026)</button>
         <button className="btn-ghost text-xs" disabled={busy} onClick={seed}>Load curated summaries + app guide</button>
       </div>
 

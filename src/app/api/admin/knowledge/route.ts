@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
-import { SEED_KNOWLEDGE, chunkText } from "@/lib/knowledge";
+import { SEED_KNOWLEDGE, chunkText, LEGAL_DOCS, loadLegalDoc } from "@/lib/knowledge";
 
 export const runtime = "nodejs";
 
@@ -27,19 +25,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, added: SEED_KNOWLEDGE.length, sources });
   }
 
-  // Load the full Electoral Act 2026 from the text file bundled in the repo/image.
-  if (body.mode === "seed-act-file") {
-    const source = "electoral-act-2026";
-    let text = "";
-    for (const p of ["LEGAL/electoral-act-2026.txt", "./LEGAL/electoral-act-2026.txt"]) {
-      try { text = await readFile(path.join(process.cwd(), p), "utf8"); break; } catch { /* try next */ }
-    }
-    if (!text.trim()) return NextResponse.json({ error: "Act file not found in the deployment (LEGAL/electoral-act-2026.txt)." }, { status: 404 });
-    await db.knowledgeChunk.deleteMany({ where: { source } });
-    const chunks = chunkText(text, 1500);
-    await db.knowledgeChunk.createMany({ data: chunks.map((content, i) => ({ source, title: `Electoral Act 2026 — part ${i + 1}`, content, ord: i + 1 })) });
-    await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "knowledge:import", entity: "KnowledgeChunk", meta: { source, chunks: chunks.length } } });
-    return NextResponse.json({ ok: true, source, added: chunks.length });
+  // Load the bundled legal documents (Electoral Act 2026 + INEC Regulations &
+  // Guidelines 2026) from the text files shipped in the repo/image. Both are public.
+  if (body.mode === "seed-act-file" || body.mode === "seed-legal-docs") {
+    const results: { source: string; added: number }[] = [];
+    // Optional single-doc targeting via body.source; default = all bundled docs.
+    const docs = body.source ? LEGAL_DOCS.filter((d) => d.source === body.source) : LEGAL_DOCS;
+    for (const doc of docs) results.push({ source: doc.source, added: await loadLegalDoc(doc) });
+    const total = results.reduce((n, r) => n + r.added, 0);
+    if (total === 0) return NextResponse.json({ error: "No legal doc text found in the deployment (LEGAL/*.txt)." }, { status: 404 });
+    await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "knowledge:import", entity: "KnowledgeChunk", meta: { results } } });
+    return NextResponse.json({ ok: true, added: total, results });
   }
 
   // Bulk import a full document: chunk the pasted text under a source.

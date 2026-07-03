@@ -199,7 +199,7 @@ export default function Dashboard({ session }: { session: Session }) {
       <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-surface/80 px-4 py-3 backdrop-blur-md sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
           {brand.logoUrl
-            ? <img src={brand.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded object-contain" />
+            ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[120px] shrink-0 object-contain" />
             : <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>}
           <div className="min-w-0">
             <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{brand.name} · Live</div>
