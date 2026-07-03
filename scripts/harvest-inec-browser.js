@@ -56,15 +56,25 @@
     }));
   }
 
-  // One download at the end (a single blob) — Chrome silently blocks repeated
-  // auto-downloads, so we accumulate all states and download once.
-  function downloadFile(name, payload) {
+  function saveFile(name, payload) {
     const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+  }
+
+  // Show a big fixed button. Chrome blocks *automatic* downloads but never a
+  // download triggered by a real user click — so we let the user click to save.
+  function showDownloadButton(name, payload) {
+    document.getElementById("__inecdl")?.remove();
+    const btn = document.createElement("button");
+    btn.id = "__inecdl";
+    btn.textContent = `⬇ Click to download ${name} (${payload.count ?? payload.units?.length ?? ""} units)`;
+    btn.style.cssText = "position:fixed;top:90px;left:24px;z-index:2147483647;padding:20px 26px;font-size:18px;font-weight:800;background:#26a65b;color:#fff;border:4px solid #fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.6);cursor:pointer";
+    btn.onclick = () => { saveFile(name, payload); btn.textContent = `✓ Saved ${name} — check Downloads`; btn.style.background = "#0a7a3f"; };
+    document.body.appendChild(btn);
   }
 
   async function harvestState(state) {
@@ -122,8 +132,9 @@
       }
       this.store = store;
       const name = store.length === 1 ? store[0].state.replace(/\s+/g, "_") + ".json" : "NIGERIA-INEC-all.json";
-      downloadFile(name, store.length === 1 ? store[0] : { harvestedAt: new Date().toISOString(), count: store.reduce((n, s) => n + s.count, 0), states: store });
-      console.log(`%cDone — downloaded ${name}. Upload it in PSR admin → Polling-unit warehouse.`, "color:#26a65b;font-weight:bold");
+      const payload = store.length === 1 ? store[0] : { harvestedAt: new Date().toISOString(), count: store.reduce((n, s) => n + s.count, 0), states: store };
+      showDownloadButton(name, payload);
+      console.log(`%cDone — ${store.length} state(s) harvested. CLICK the green button (top-left) to download ${name}, then upload it in PSR admin → Polling-unit warehouse.`, "color:#26a65b;font-weight:bold;font-size:14px");
     },
   };
   console.log("%cINEC harvester ready. Run:  INEC.run()   (all)   or   INEC.run([\"ONDO\"])", "color:#26a65b;font-weight:bold");
