@@ -870,7 +870,25 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   const [summary, setSummary] = useState<{ states: number; lgas: number; wards: number; units: number } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
+  const [coverage, setCoverage] = useState<any>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function checkCoverage() {
+    setBusy("coverage");
+    const r = await api("/api/admin/geo/validate");
+    const j = await r.json();
+    setBusy(null);
+    if (r.ok) {
+      setCoverage(j);
+      const s = j.summary;
+      const gaps = [
+        s.states < s.expectedStates ? `${s.expectedStates - s.states} states missing` : null,
+        s.lgas < s.expectedLgas ? `${s.expectedLgas - s.lgas} LGAs short` : null,
+        s.emptyWards ? `${s.emptyWards} wards with 0 units` : null,
+      ].filter(Boolean).join(" · ");
+      onFlash(s.complete ? "Coverage complete — 37 states · 774 LGAs" : `Coverage gaps: ${gaps || "check details"}`);
+    } else onFlash(j.error || "Coverage check failed");
+  }
 
   async function load() {
     const r = await api("/api/admin/geo/harvest");
@@ -974,8 +992,27 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
         <button className="btn-primary text-xs" disabled={!!busy} onClick={harvestAll}>
           {busy ? `Working ${busy}…` : "Harvest all 37 states"}
         </button>
+        <button className="btn-ghost text-xs" disabled={!!busy} onClick={checkCoverage}>Check coverage (37 / 774)</button>
         <button className="btn-ghost text-xs text-bad" disabled={!!busy} onClick={clearWarehouse}>Clear warehouse</button>
       </div>
+
+      {coverage && (
+        <div className="mb-3 rounded-lg border border-line bg-surface p-3 text-[11px]">
+          <div className="mb-2 font-semibold">
+            Coverage: {coverage.summary.states}/37 states · {coverage.summary.lgas}/{coverage.summary.expectedLgas} LGAs · {coverage.summary.units.toLocaleString()} units
+            {coverage.summary.emptyWards > 0 && <span className="text-warn"> · {coverage.summary.emptyWards} wards with no units</span>}
+            {coverage.summary.complete && <span className="text-good"> · ✓ complete</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
+            {coverage.states.map((s: any) => (
+              <div key={s.state} className={`flex justify-between tabular ${s.complete ? "text-muted" : "text-warn"}`}>
+                <span className="truncate">{s.complete ? "" : "⚠ "}{s.state}</span>
+                <span>{s.lgas}/{s.expectedLgas ?? "?"} · {s.units}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap gap-1">
         {states.map((s) => (
