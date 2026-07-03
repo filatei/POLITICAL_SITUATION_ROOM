@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
 import { inviteCode } from "@/lib/code";
+import { seatStatus } from "@/lib/seats";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,13 @@ export async function POST(req: NextRequest) {
 
   const election = await db.election.findFirst({ orderBy: { createdAt: "desc" } });
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
+
+  // Seat cap: you can browse every unit, but only create as many codes as you have seats.
+  const seats = await seatStatus(election.id);
+  if (seats && seats.available < 1) {
+    return NextResponse.json({ error: `Seat limit reached (${seats.used}/${seats.total}). Buy more seats to add agents.`, needSeats: true }, { status: 402 });
+  }
+
   const pu = await db.pollingUnit.findUnique({ where: { id: pollingUnitId }, include: { ward: true, lga: true } });
   if (!pu) return NextResponse.json({ error: "Unknown polling unit." }, { status: 404 });
 

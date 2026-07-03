@@ -12,6 +12,7 @@ import { setIO, markOnline, markOffline, broadcastPresence, emitDashboard } from
 import { reconcilePending } from "./src/lib/billing-credit";
 import { paystackEnabled, squadEnabled } from "./src/lib/payments";
 import { ensureKnowledgeSeeded } from "./src/lib/knowledge";
+import { ensureDefaultTenant } from "./src/lib/tenant";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT || 3200);
@@ -107,6 +108,11 @@ app.prepare().then(() => {
   // Seed the AI knowledge base (Electoral Act + summaries) on first boot.
   ensureKnowledgeSeeded()
     .then((r) => { if (r.seeded) console.log(`> knowledge base seeded: ${r.chunks} chunks`); })
+    .catch(() => {});
+
+  // Wrap the existing election in a default tenant (ondogov2027) on first boot.
+  ensureDefaultTenant()
+    .then((r) => { if (r.created) console.log(`> default tenant created: ${r.slug}`); })
     .catch(() => {});
 
   // Auto-reconcile billing: since a shared merchant's single webhook may live in

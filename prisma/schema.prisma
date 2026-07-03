@@ -97,6 +97,7 @@ model Election {
   submissions  Submission[]
   instructions Instruction[]
   subscription Subscription?
+  tenant       Tenant?
 }
 
 model Party {
@@ -300,6 +301,20 @@ model AuditLog {
   at        DateTime @default(now())
 
   @@index([entity, entityId])
+}
+
+// A tenant is one white-labelled situation room for one election, addressed at
+// /{slug} (e.g. ondogov2027, ondosouthsenate2027).
+model Tenant {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  electionId   String   @unique
+  election     Election @relation(fields: [electionId], references: [id])
+  contactEmail String?
+  contactPhone String?
+  adminEmails  String[] @default([])
+  createdAt    DateTime @default(now())
 }
 
 model ContactMessage {

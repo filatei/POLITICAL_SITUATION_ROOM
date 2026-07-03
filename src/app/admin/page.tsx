@@ -293,6 +293,7 @@ function Console({ session }: { session: Session }) {
           </section>
           {session.role === "ADMIN" && <KnowledgeCard onFlash={setFlash} />}
         </div>
+        {session.role === "ADMIN" && <WarehouseCard onFlash={setFlash} />}
         {session.role === "ADMIN" && <BillingCard onFlash={setFlash} />}
         {session.role === "ADMIN" && <BrandingCard onFlash={setFlash} />}
         <TallyOverride units={units} onFlash={setFlash} />
@@ -815,6 +816,85 @@ function KnowledgeCard({ onFlash }: { onFlash: (s: string) => void }) {
       <input className="input mb-2" value={src} onChange={(e) => setSrc(e.target.value)} placeholder="source name e.g. electoral-act-2022-full" />
       <textarea className="input min-h-28" value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the full Electoral Act 2022 text here (or any reference doc). It's chunked and stored for the assistant." />
       <button className="btn-primary mt-2 w-full" disabled={busy || !text.trim()} onClick={importText}>{busy ? "Importing…" : "Import & index"}</button>
+    </section>
+  );
+}
+
+/* -------- National geography warehouse: harvest INEC polling units -------- */
+function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
+  const [states, setStates] = useState<string[]>([]);
+  const [summary, setSummary] = useState<{ states: number; lgas: number; wards: number; units: number } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+
+  async function load() {
+    const r = await api("/api/admin/geo/harvest");
+    if (r.ok) { const j = await r.json(); setStates(j.states); setSummary(j.summary); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function harvest(state: string) {
+    setBusy(state);
+    const r = await api("/api/admin/geo/harvest", { method: "POST", body: JSON.stringify({ state }) });
+    const j = await r.json();
+    setBusy(null);
+    if (r.ok) {
+      const res = j.result;
+      setLog((l) => [`✓ ${state}: ${res.lgas} LGAs · ${res.wards} wards · ${res.units} units (${(res.ms / 1000).toFixed(0)}s)`, ...l].slice(0, 40));
+      setSummary(j.summary);
+      onFlash(`${state} warehoused — ${res.units} units`);
+    } else {
+      setLog((l) => [`✗ ${state}: ${j.error || "failed"}`, ...l].slice(0, 40));
+      onFlash(j.error || "Harvest failed");
+    }
+    return r.ok;
+  }
+
+  async function harvestAll() {
+    for (const s of states) {
+      // eslint-disable-next-line no-await-in-loop
+      await harvest(s);
+    }
+    onFlash("National harvest complete");
+  }
+
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Polling-unit warehouse</h2>
+      <p className="mb-3 text-[11px] text-muted">Import Nigeria&apos;s full LGA → Ward → Polling-Unit register from INEC so every election can pick real units. Idempotent — re-running a state just updates it.</p>
+
+      {summary && (
+        <div className="mb-3 grid grid-cols-4 gap-2 text-center">
+          {[["States", summary.states], ["LGAs", summary.lgas], ["Wards", summary.wards], ["Units", summary.units]].map(([k, v]) => (
+            <div key={k as string} className="rounded-lg border border-line py-2">
+              <div className="text-sm font-bold tabular">{(v as number).toLocaleString()}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted">{k}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        <button className="btn-primary text-xs" disabled={!!busy} onClick={harvestAll}>
+          {busy ? `Harvesting ${busy}…` : "Harvest all 37 states"}
+        </button>
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-1">
+        {states.map((s) => (
+          <button key={s} disabled={!!busy}
+            className="rounded-md border border-line px-2 py-1 text-[11px] hover:border-accent disabled:opacity-40"
+            onClick={() => harvest(s)}>
+            {busy === s ? "…" : s}
+          </button>
+        ))}
+      </div>
+
+      {log.length > 0 && (
+        <div className="max-h-40 space-y-0.5 overflow-auto rounded-md border border-line bg-surface p-2 text-[11px] tabular">
+          {log.map((l, i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
     </section>
   );
 }

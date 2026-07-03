@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AiChat from "@/components/AiChat";
 import ContactForm from "@/components/ContactForm";
+import Onboard from "@/components/Onboard";
 import { getBrand } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -57,13 +58,24 @@ export default async function Home() {
           the moment they land — verified, mapped, and analysed live.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/room" className="btn-primary px-5 py-3 text-base">Open the Situation Room →</Link>
+          <a href="#create" className="btn-primary px-5 py-3 text-base">Create your situation room →</a>
           <Link href="/agent/login" className="btn-ghost px-5 py-3 text-base">I'm a field agent</Link>
         </div>
       </section>
 
-      {/* Action cards */}
-      <section className="mx-auto grid max-w-6xl gap-4 px-5 pb-16 sm:grid-cols-3">
+      {/* Onboarding — the primary action */}
+      <section id="create" className="mx-auto max-w-3xl px-5 pb-16">
+        <div className="mb-6 text-center">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Launch your own situation room</h2>
+          <p className="mt-2 text-muted">Set up a branded monitoring room for any election in minutes. Start free with 10 agent seats — no card required.</p>
+        </div>
+        <Onboard />
+      </section>
+
+      {/* Sign-in cards for existing rooms */}
+      <section className="mx-auto max-w-6xl px-5 pb-16">
+        <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-muted">Already have a room? Sign in</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
         {[
           { href: "/agent/login", title: "Field Agent", body: "Send scores, incidents and voice notes from your polling unit. Works offline.", cta: "Open agent app" },
           { href: "/room", title: "Situation Room", body: "Live tally, scores by unit, incidents, AI analysis and big-screen relay.", cta: "Open dashboard" },
@@ -75,6 +87,7 @@ export default async function Home() {
             <div className="mt-4 text-sm font-medium text-accent">{c.cta} →</div>
           </Link>
         ))}
+        </div>
       </section>
 
       {/* Explainer video */}

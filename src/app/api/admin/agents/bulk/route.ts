@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
 import { inviteCode } from "@/lib/code";
+import { seatStatus } from "@/lib/seats";
 
 export const runtime = "nodejs";
 
@@ -27,10 +28,20 @@ export async function POST(req: NextRequest) {
   });
   if (!units.length) return NextResponse.json({ error: "No polling units in this LGA." }, { status: 404 });
 
+  // Cap generation to available seats — you can browse all units, but only make
+  // as many codes as your plan allows.
+  const seats = await seatStatus(election.id);
+  const cap = seats ? seats.available : Number.MAX_SAFE_INTEGER;
+  if (seats && cap < 1) {
+    return NextResponse.json({ error: `Seat limit reached (${seats.used}/${seats.total}). Buy more seats to add agents.`, needSeats: true }, { status: 402 });
+  }
+
   const created: { name: string; inviteCode: string; unitLabel: string }[] = [];
+  outer:
   for (const u of units) {
     const existing = await db.agent.count({ where: { pollingUnitId: u.id } });
     for (let k = 0; k < n; k++) {
+      if (created.length >= cap) break outer;
       let code = inviteCode();
       for (let i = 0; i < 10 && (await db.agent.findUnique({ where: { inviteCode: code } })); i++) code = inviteCode();
       const seq = existing + k + 1;
@@ -41,5 +52,6 @@ export async function POST(req: NextRequest) {
     }
   }
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:bulk", entity: "Lga", entityId: lgaId, meta: { count: created.length, perUnit: n, units: units.length } } });
-  return NextResponse.json({ ok: true, count: created.length, created });
+  const capped = seats ? created.length >= cap : false;
+  return NextResponse.json({ ok: true, count: created.length, created, capped, seatsAvailable: seats ? Math.max(0, cap - created.length) : null });
 }
