@@ -33,14 +33,14 @@
     "ZAMFARA", "FCT",
   ];
 
-  async function j(url, tries = 6) {
+  async function j(url, tries = 8) {
     for (let i = 0; i < tries; i++) {
       try {
         const r = await fetch(url, { headers: HDR, credentials: "include" });
         const d = JSON.parse(await r.text());
         if (Array.isArray(d)) return d;
       } catch (e) { /* retry */ }
-      await sleep(400 * (i + 1));
+      await sleep(600 * (i + 1));
     }
     throw new Error("gave up: " + url);
   }
@@ -71,22 +71,37 @@
     const lgas = await getLgas(state);
     const units = [];
     let wards = 0;
+    const failed = [];
+    const push = (us, lga, ward) => {
+      for (const u of us) {
+        units.push({
+          id: String(u.id || ""),
+          pu: String(u.pu || "").trim(),
+          delim: String(u.delim || "").trim(),
+          lga: String(u.lga || lga).trim(),
+          ward: String(u.ward || ward).trim(),
+        });
+      }
+    };
     for (const lga of lgas) {
-      const wl = await getWards(state, lga);
+      let wl = [];
+      try { wl = await getWards(state, lga); } catch (e) { console.warn(`   ${state}: ward list failed for ${lga}`); }
       wards += wl.length;
-      await pool(wl, 6, async (ward) => {
-        const us = await getUnits(state, lga, ward);
-        for (const u of us) {
-          units.push({
-            id: String(u.id || ""),
-            pu: String(u.pu || "").trim(),
-            delim: String(u.delim || "").trim(),
-            lga: String(u.lga || lga).trim(),
-            ward: String(u.ward || ward).trim(),
-          });
-        }
+      // A single flaky ward must NOT abort the whole state — collect & retry later.
+      await pool(wl, 3, async (ward) => {
+        try { push(await getUnits(state, lga, ward), lga, ward); }
+        catch (e) { failed.push([lga, ward]); }
       });
-      console.log(`   ${state}: ${lga} — total ${units.length} units`);
+      console.log(`   ${state}: ${lga} — total ${units.length} units${failed.length ? ` (${failed.length} wards to retry)` : ""}`);
+    }
+    if (failed.length) {
+      console.warn(`${state}: retrying ${failed.length} failed wards…`);
+      const still = [];
+      for (const [lga, ward] of failed) {
+        try { push(await getUnits(state, lga, ward), lga, ward); } catch (e) { still.push([lga, ward]); }
+        await sleep(500);
+      }
+      if (still.length) console.warn(`${state}: ${still.length} wards still failed — file saved anyway, re-run to fill gaps`);
     }
     const payload = { state, harvestedAt: new Date().toISOString(), lgas: lgas.length, wards, count: units.length, units };
     download(state, payload);
