@@ -144,6 +144,18 @@ export async function importUnits(stateName: string, rows: RawUnit[]): Promise<H
   return { state, lgas: byLga.size, wards: wardCount, units: unitCount, ms: Date.now() - started };
 }
 
+// Wipe ALL warehoused geography. Detaches agent + submission unit references first
+// so foreign keys don't block the delete. Use before a clean national re-import.
+export async function clearWarehouse() {
+  await db.agent.updateMany({ data: { pollingUnitId: null, wardId: null, lgaId: null, stateId: null } });
+  await db.submission.updateMany({ where: { pollingUnitId: { not: null } }, data: { pollingUnitId: null } });
+  const units = await db.pollingUnit.deleteMany({});
+  const wards = await db.ward.deleteMany({});
+  const lgas = await db.lga.deleteMany({});
+  const states = await db.state.deleteMany({});
+  return { states: states.count, lgas: lgas.count, wards: wards.count, units: units.count };
+}
+
 export async function warehouseSummary() {
   const [states, lgas, wards, units] = await Promise.all([
     db.state.count(),

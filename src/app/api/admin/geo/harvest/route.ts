@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, requireRole, Session } from "@/lib/auth";
-import { harvestState, warehouseSummary } from "@/lib/geo-warehouse";
+import { harvestState, warehouseSummary, clearWarehouse } from "@/lib/geo-warehouse";
 import { INEC_STATES } from "@/lib/inec";
 
 export const runtime = "nodejs";
@@ -32,5 +32,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, result, summary: await warehouseSummary() });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Harvest failed" }, { status: 500 });
+  }
+}
+
+// DELETE { confirm:"CLEAR" } → wipe ALL warehoused geography (detaches agent +
+// submission unit links first). For a clean national re-import.
+export async function DELETE(req: NextRequest) {
+  const s = await getSession(req);
+  if (!allowed(s)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { confirm } = await req.json().catch(() => ({}));
+  if (confirm !== "CLEAR") return NextResponse.json({ error: "Pass { confirm: 'CLEAR' } to wipe the warehouse." }, { status: 400 });
+  try {
+    const removed = await clearWarehouse();
+    return NextResponse.json({ ok: true, removed, summary: await warehouseSummary() });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "Clear failed" }, { status: 500 });
   }
 }

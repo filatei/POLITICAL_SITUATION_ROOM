@@ -884,6 +884,19 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
     onFlash("National harvest complete");
   }
 
+  async function clearWarehouse() {
+    if (!window.confirm("Wipe ALL warehoused states/LGAs/wards/units and detach every agent from its unit? Do this before a clean national re-import.")) return;
+    setBusy("clear");
+    const r = await api("/api/admin/geo/harvest", { method: "DELETE", body: JSON.stringify({ confirm: "CLEAR" }) });
+    const j = await r.json();
+    setBusy(null);
+    if (r.ok) {
+      setSummary(j.summary);
+      setLog((l) => [`⌦ Warehouse cleared — removed ${j.removed.units} units, ${j.removed.wards} wards, ${j.removed.lgas} LGAs, ${j.removed.states} states`, ...l].slice(0, 60));
+      onFlash("Warehouse cleared");
+    } else onFlash(j.error || "Clear failed");
+  }
+
   return (
     <section className="card p-5">
       <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Polling-unit warehouse</h2>
@@ -911,8 +924,9 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
 
       <div className="mb-3 flex flex-wrap gap-2">
         <button className="btn-primary text-xs" disabled={!!busy} onClick={harvestAll}>
-          {busy ? `Harvesting ${busy}…` : "Harvest all 37 states"}
+          {busy ? `Working ${busy}…` : "Harvest all 37 states"}
         </button>
+        <button className="btn-ghost text-xs text-bad" disabled={!!busy} onClick={clearWarehouse}>Clear warehouse</button>
       </div>
 
       <div className="mb-3 flex flex-wrap gap-1">
