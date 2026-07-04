@@ -5,7 +5,11 @@ import Onboard from "@/components/Onboard";
 import { getBrand } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
-const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "";
+// Defaults to the built-in animated explainer at /explainer.html. Override with
+// NEXT_PUBLIC_EXPLAINER_URL (a YouTube/Vimeo embed, an .mp4, or another page).
+const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "/explainer.html";
+const EXPLAINER_IS_VIDEO = /\.(mp4|webm|ogg)(\?|$)/i.test(EXPLAINER_URL);
+const EXPLAINER_IS_EMBED = EXPLAINER_URL.includes("youtube") || EXPLAINER_URL.includes("vimeo") || EXPLAINER_URL.endsWith(".html") || EXPLAINER_URL.startsWith("/");
 
 const STRUCTURE = [
   { level: "Polling Unit", count: "176,846", form: "EC8A", who: "Capture point — agents report here" },
@@ -69,17 +73,14 @@ export default async function Home() {
       <section className="mx-auto max-w-4xl px-5 pb-16">
         <h2 className="mb-4 text-center text-2xl font-bold tracking-tight sm:text-3xl">See it in action</h2>
         <div className="overflow-hidden rounded-2xl border border-line bg-black">
-          {EXPLAINER_URL ? (
-            EXPLAINER_URL.includes("youtube") || EXPLAINER_URL.includes("vimeo") ? (
-              <div className="aspect-video"><iframe className="h-full w-full" src={EXPLAINER_URL} title="Explainer" allow="accelerated-download; autoplay; clipboard-write; encrypted-media; picture-in-picture" allowFullScreen /></div>
-            ) : (
-              <video className="aspect-video w-full" src={EXPLAINER_URL} controls poster="/icon-512.png" />
-            )
+          {EXPLAINER_IS_VIDEO ? (
+            <video className="aspect-video w-full" src={EXPLAINER_URL} controls poster="/og.png" />
+          ) : EXPLAINER_IS_EMBED ? (
+            <div className="aspect-video"><iframe className="h-full w-full" src={EXPLAINER_URL} title="Explainer" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div>
           ) : (
             <div className="flex aspect-video flex-col items-center justify-center gap-2 text-center">
               <div className="grid h-16 w-16 place-items-center rounded-full bg-accent/20 text-2xl text-accent">▶</div>
-              <div className="text-sm font-medium text-ink">Explainer video</div>
-              <div className="max-w-md px-6 text-xs text-muted">A short walkthrough of the situation room and its white-label features. Set <span className="tabular">NEXT_PUBLIC_EXPLAINER_URL</span> (a YouTube/Vimeo embed or an MP4 URL) to show it here.</div>
+              <div className="text-sm font-medium text-ink">Explainer</div>
             </div>
           )}
         </div>

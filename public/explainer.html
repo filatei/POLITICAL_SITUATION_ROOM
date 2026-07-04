@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Political Situation Room — explainer</title>
+<style>
+  :root{ --bg:#0a0a0f; --ink:#f6f7f8; --muted:#9aa2ab; --line:rgba(255,255,255,.10);
+         --red:#ef4444; --green:#22c55e; --panel:rgba(255,255,255,.04); }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(60rem 60rem at 80% -10%, rgba(34,197,94,.10), transparent 60%),
+        radial-gradient(60rem 60rem at -10% 110%, rgba(239,68,68,.10), transparent 60%), var(--bg);
+        color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+        overflow:hidden}
+  #stage{position:fixed; inset:0; display:flex; align-items:center; justify-content:center}
+  .scene{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+         gap:2.2vmin; padding:6vmin; text-align:center; opacity:0; transform:translateY(2.5vmin) scale(.99);
+         transition:opacity .6s ease, transform .6s ease; pointer-events:none}
+  .scene.active{opacity:1; transform:none}
+  .eyebrow{font-size:2.1vmin; letter-spacing:.35em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:7.5vmin; line-height:1.02; font-weight:800; letter-spacing:-.02em}
+  h2{font-size:5.4vmin; line-height:1.05; font-weight:800; letter-spacing:-.01em}
+  .sub{font-size:2.7vmin; color:var(--muted); max-width:74vmin}
+  .accent{color:var(--green)}
+  .red{color:var(--red)}
+  .logo{height:11vmin; width:auto; filter:drop-shadow(0 6px 30px rgba(239,68,68,.25))}
+  /* stat grid */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:2.2vmin; width:min(150vmin,92vw)}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:2vmin; padding:3vmin 2vmin}
+  .stat .n{font-size:6.2vmin; font-weight:800; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+  .stat .l{margin-top:.6vmin; font-size:1.9vmin; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); font-weight:700}
+  /* contest rows */
+  .rows{display:flex; flex-direction:column; gap:1.4vmin; width:min(120vmin,92vw)}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:2vmin; background:var(--panel);
+       border:1px solid var(--line); border-radius:1.6vmin; padding:1.8vmin 2.6vmin; opacity:0; transform:translateX(-2vmin);
+       transition:opacity .5s, transform .5s}
+  .scene.active .row{opacity:1; transform:none}
+  .row .c{font-weight:700; font-size:2.7vmin}
+  .row .s{font-size:2.3vmin; color:var(--green); font-weight:700}
+  .breadcrumb{display:flex; gap:1.2vmin; flex-wrap:wrap; justify-content:center; font-size:2.6vmin; color:var(--muted)}
+  .breadcrumb b{color:var(--ink)}
+  /* party chips */
+  .chips{display:flex; flex-wrap:wrap; gap:1.4vmin; justify-content:center; width:min(140vmin,92vw)}
+  .chip{display:flex; align-items:center; gap:1vmin; padding:1.3vmin 2.2vmin; border-radius:99px; font-weight:800;
+        font-size:2.4vmin; color:#fff; opacity:0; transform:scale(.8); transition:opacity .4s, transform .4s}
+  .scene.active .chip{opacity:1; transform:none}
+  .dot{width:1.6vmin; height:1.6vmin; border-radius:99px; background:rgba(255,255,255,.85)}
+  /* flow steps */
+  .flow{display:grid; grid-template-columns:repeat(3,1fr); gap:2vmin; width:min(150vmin,94vw)}
+  .step{background:var(--panel); border:1px solid var(--line); border-radius:2vmin; padding:3vmin 2.4vmin; text-align:left;
+        opacity:0; transform:translateY(2vmin); transition:opacity .5s, transform .5s}
+  .scene.active .step{opacity:1; transform:none}
+  .step .k{width:6vmin; height:6vmin; border-radius:1.4vmin; display:grid; place-items:center; font-size:3vmin;
+           background:rgba(34,197,94,.14); color:var(--green); margin-bottom:1.6vmin}
+  .step h3{font-size:2.9vmin; font-weight:800; margin-bottom:.8vmin}
+  .step p{font-size:2.1vmin; color:var(--muted); line-height:1.35}
+  .cta{display:inline-flex; align-items:center; gap:1.4vmin; background:var(--green); color:#04120a; font-weight:800;
+       font-size:3vmin; padding:2vmin 3.4vmin; border-radius:99px}
+  .url{font-size:2.6vmin; color:var(--muted); font-variant-numeric:tabular-nums}
+  /* PU dot field */
+  #field{position:absolute; inset:0; z-index:-1; opacity:.5}
+  /* progress */
+  #bar{position:fixed; left:0; bottom:0; height:.6vmin; background:var(--green); width:0%; transition:width .2s linear}
+  .badge{display:inline-flex; align-items:center; gap:1vmin; font-size:2.1vmin; color:var(--muted); font-weight:700}
+  .live{width:1.6vmin;height:1.6vmin;border-radius:99px;background:var(--red);box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 2.4vmin rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<div id="stage">
+
+  <!-- S1 -->
+  <section class="scene" data-i="0">
+    <img class="logo" src="/psr-logo.png" alt="PSR" onerror="this.style.display='none'"/>
+    <h1>Political Situation<br/>Room</h1>
+    <div class="sub">An <b class="accent">independent, real-time</b> election monitoring platform for Nigeria.</div>
+    <div class="badge"><span class="live"></span> LIVE citizen &amp; party observation</div>
+  </section>
+
+  <!-- S2 -->
+  <section class="scene" data-i="1">
+    <div class="eyebrow">Nigeria’s electoral map — from INEC</div>
+    <h2>We know the whole country,<br/>down to the polling unit</h2>
+    <div class="stats">
+      <div class="stat"><div class="n" data-to="37" data-suffix="">0</div><div class="l">States + FCT</div></div>
+      <div class="stat"><div class="n" data-to="774">0</div><div class="l">LGAs</div></div>
+      <div class="stat"><div class="n" data-to="8809">0</div><div class="l">Wards</div></div>
+      <div class="stat"><div class="n" data-to="176846">0</div><div class="l">Polling units</div></div>
+    </div>
+    <div class="sub">Every state, LGA, ward and polling unit — searchable and mapped.</div>
+  </section>
+
+  <!-- S3 -->
+  <section class="scene" data-i="2">
+    <div class="eyebrow">Every contest, correctly scoped</div>
+    <div class="rows">
+      <div class="row" style="transition-delay:.05s"><span class="c">Presidential</span><span class="s">Nigeria</span></div>
+      <div class="row" style="transition-delay:.15s"><span class="c">Governorship</span><span class="s">State</span></div>
+      <div class="row" style="transition-delay:.25s"><span class="c">Senate</span><span class="s">109 Senatorial districts</span></div>
+      <div class="row" style="transition-delay:.35s"><span class="c">House of Reps</span><span class="s">360 Federal constituencies</span></div>
+      <div class="row" style="transition-delay:.45s"><span class="c">State Assembly</span><span class="s">State constituencies</span></div>
+      <div class="row" style="transition-delay:.55s"><span class="c">LG Chairmanship</span><span class="s">LGA</span></div>
+    </div>
+    <div class="breadcrumb"><b>State</b> › <b>LGA</b> › <b>Ward</b> › <b>Polling unit</b></div>
+  </section>
+
+  <!-- S4 -->
+  <section class="scene" data-i="3">
+    <div class="eyebrow">The ballot</div>
+    <h2>All registered parties,<br/>on every scoreboard</h2>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <!-- S5 -->
+  <section class="scene" data-i="4">
+    <div class="eyebrow">What we do</div>
+    <div class="flow">
+      <div class="step" style="transition-delay:.05s"><div class="k">📍</div><h3>Agents on the ground</h3><p>Accredited agents at polling units send scores, incidents and photos — offline-first, with GPS.</p></div>
+      <div class="step" style="transition-delay:.2s"><div class="k">📡</div><h3>Live situation room</h3><p>Reports stream in and aggregate in real time — by unit, ward, LGA and party.</p></div>
+      <div class="step" style="transition-delay:.35s"><div class="k">✅</div><h3>Verify &amp; tally</h3><p>Coordinators accept verified results; the party tally updates instantly toward the FPTP winner.</p></div>
+    </div>
+    <div class="badge"><span class="live"></span> A parallel, independent record — not the official INEC result</div>
+  </section>
+
+  <!-- S6 -->
+  <section class="scene" data-i="5">
+    <img class="logo" src="/psr-logo.png" alt="PSR" onerror="this.style.display='none'"/>
+    <h2>Launch your situation room<br/>in minutes</h2>
+    <div class="cta">Start free — 10 agent seats →</div>
+    <div class="url">sr.torama.money</div>
+  </section>
+
+</div>
+<div id="bar"></div>
+
+<script>
+(function(){
+  // Scene timeline (seconds). Total ~60s, then loops.
+  var scenes = [
+    { at:0,  dur:8  },  // S1
+    { at:8,  dur:12 },  // S2
+    { at:20, dur:12 },  // S3
+    { at:32, dur:10 },  // S4
+    { at:42, dur:12 },  // S5
+    { at:54, dur:6  }   // S6
+  ];
+  var TOTAL = 60;
+  var els = Array.prototype.slice.call(document.querySelectorAll('.scene'));
+  var countedFor = {};
+
+  // Party chips
+  var PARTIES = [
+    ['APC','#2563eb'],['PDP','#dc2626'],['LP','#059669'],['NNPP','#7c3aed'],['APGA','#ca8a04'],
+    ['ADC','#0891b2'],['SDP','#16a34a'],['YPP','#0d9488'],['AA','#f97316'],['APM','#9333ea'],
+    ['ADP','#14b8a6'],['A','#0ea5e9'],['NRM','#db2777'],['PRP','#65a30d'],['ZLP','#4f46e5'],['BP','#a16207']
+  ];
+  var chips = document.getElementById('chips');
+  PARTIES.forEach(function(p,i){
+    var c = document.createElement('div'); c.className='chip';
+    c.style.background = p[1]; c.style.transitionDelay = (i*0.06)+'s';
+    c.innerHTML = '<span class="dot"></span>'+p[0];
+    chips.appendChild(c);
+  });
+
+  function animateCount(el){
+    var to = parseFloat(el.getAttribute('data-to'));
+    var start = performance.now(), dur = 1400;
+    function tick(now){
+      var t = Math.min(1,(now-start)/dur); var e = 1-Math.pow(1-t,3);
+      el.textContent = Math.round(to*e).toLocaleString('en-US');
+      if(t<1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function setScene(i){
+    els.forEach(function(el,idx){ el.classList.toggle('active', idx===i); });
+    if(i===1 && !countedFor[1]){ countedFor[1]=true;
+      document.querySelectorAll('[data-i="1"] .n').forEach(animateCount); }
+  }
+
+  var t0 = performance.now();
+  function loop(now){
+    var elapsed = ((now - t0)/1000) % TOTAL;
+    document.getElementById('bar').style.width = (elapsed/TOTAL*100)+'%';
+    var cur = 0;
+    for(var i=0;i<scenes.length;i++){ if(elapsed >= scenes[i].at) cur=i; }
+    setScene(cur);
+    if(elapsed < 1) countedFor = {}; // reset count-ups each loop
+    requestAnimationFrame(loop);
+  }
+  setScene(0);
+  requestAnimationFrame(loop);
+
+  // Background polling-unit dot field (subtle drift)
+  var cv = document.getElementById('field'), cx = cv.getContext('2d'), dots=[];
+  function resize(){ cv.width=innerWidth; cv.height=innerHeight;
+    dots = []; var n = Math.min(140, Math.floor(innerWidth*innerHeight/16000));
+    for(var i=0;i<n;i++) dots.push({x:Math.random()*cv.width,y:Math.random()*cv.height,
+      r:Math.random()*1.6+0.6, s:Math.random()*0.25+0.05, c: Math.random()<0.5?'34,197,94':'239,68,68'});
+  }
+  function draw(){ cx.clearRect(0,0,cv.width,cv.height);
+    dots.forEach(function(d){ d.y -= d.s; if(d.y< -4) d.y=cv.height+4;
+      cx.beginPath(); cx.arc(d.x,d.y,d.r,0,7); cx.fillStyle='rgba('+d.c+',.5)'; cx.fill(); });
+    requestAnimationFrame(draw);
+  }
+  addEventListener('resize', resize); resize(); draw();
+})();
+</script>
+</body>
+</html>
