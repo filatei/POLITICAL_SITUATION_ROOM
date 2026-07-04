@@ -43,8 +43,9 @@ export default function RoomLogin({ onDone }: { onDone: () => void }) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-5 p-6">
-      <div className="flex items-center gap-3">
-        <span className="live-dot text-accent"><span className="block h-3 w-3 rounded-full bg-accent" /></span>
+      <div className="flex flex-col items-center gap-3 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/psr-logo.png" alt="PSR" className="h-14 w-auto" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Situation Room</h1>
           <p className="mt-0.5 text-sm text-muted">Staff sign-in.</p>

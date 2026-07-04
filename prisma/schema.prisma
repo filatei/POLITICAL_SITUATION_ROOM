@@ -215,14 +215,16 @@ model GeoImport {
 // whole LGAs). An election scoped to a constituency monitors only the polling
 // units inside these LGAs, so agents are provisioned to the correct units.
 model Constituency {
-  id        String            @id @default(cuid())
-  type      ConstituencyType
-  stateId   String
-  state     State             @relation(fields: [stateId], references: [id])
-  code      String? // INEC delimitation code if known
-  name      String
-  lgaLinks  ConstituencyLga[]
-  elections Election[]
+  id          String            @id @default(cuid())
+  type        ConstituencyType
+  stateId     String
+  state       State             @relation(fields: [stateId], references: [id])
+  code        String? // INEC delimitation code, e.g. SD/001/AB, FC/002/AB, SC/003/AB
+  name        String
+  composition Json? // raw member names: LGAs (SENATORIAL/FEDERAL) or RAs/wards (STATE)
+  collation   String? // INEC collation-centre name, when provided
+  lgaLinks    ConstituencyLga[]
+  elections   Election[]
 
   @@unique([stateId, type, name])
   @@index([stateId, type])
@@ -242,6 +244,7 @@ model ConstituencyLga {
 enum ConstituencyType {
   SENATORIAL
   FEDERAL
+  STATE
 }
 
 // Server-side backup of an imported constituency file, keyed by state+type, so

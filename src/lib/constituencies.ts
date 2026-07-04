@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
 
-// A constituency and the LGAs (by name) that compose it.
-export type ConstituencyRow = { name: string; code?: string; lgas: string[] };
-export type CType = "SENATORIAL" | "FEDERAL";
+// A constituency and the units (by name) that compose it: LGAs for SENATORIAL /
+// FEDERAL, registration areas (wards) for STATE.
+export type ConstituencyRow = { name: string; code?: string; lgas: string[]; collation?: string };
+export type CType = "SENATORIAL" | "FEDERAL" | "STATE";
 
 const norm = (s: string) => s.trim().toUpperCase();
 
@@ -38,20 +39,25 @@ export async function importConstituencies(
   for (const row of rows) {
     const name = row.name.trim();
     if (!name) continue;
+    const members = row.lgas || [];
     const c = await db.constituency.upsert({
       where: { stateId_type_name: { stateId: state.id, type, name } },
-      create: { stateId: state.id, type, name, code: row.code || null },
-      update: { code: row.code || undefined },
+      create: { stateId: state.id, type, name, code: row.code || null, composition: members as any, collation: row.collation || null },
+      update: { code: row.code || undefined, composition: members as any, collation: row.collation || undefined },
     });
-    for (const raw of row.lgas || []) {
-      const id = lgaByName.get(norm(raw));
-      if (!id) { unmatched.add(raw); continue; }
-      await db.constituencyLga.upsert({
-        where: { constituencyId_lgaId: { constituencyId: c.id, lgaId: id } },
-        create: { constituencyId: c.id, lgaId: id },
-        update: {},
-      });
-      linked++;
+    // SENATORIAL/FEDERAL compose whole LGAs -> link them. STATE composes wards,
+    // which won't match LGA names, so only the composition JSON is stored.
+    if (type !== "STATE") {
+      for (const raw of members) {
+        const id = lgaByName.get(norm(raw));
+        if (!id) { unmatched.add(raw); continue; }
+        await db.constituencyLga.upsert({
+          where: { constituencyId_lgaId: { constituencyId: c.id, lgaId: id } },
+          create: { constituencyId: c.id, lgaId: id },
+          update: {},
+        });
+        linked++;
+      }
     }
   }
 
@@ -72,10 +78,10 @@ export async function listConstituencies(stateName: string, type: CType) {
   if (!state) return [];
   const rows = await db.constituency.findMany({
     where: { stateId: state.id, type },
-    select: { id: true, name: true, code: true, _count: { select: { lgaLinks: true } } },
+    select: { id: true, name: true, code: true, composition: true, collation: true, _count: { select: { lgaLinks: true } } },
     orderBy: { name: "asc" },
   });
-  return rows.map((c) => ({ id: c.id, name: c.name, code: c.code, lgas: c._count.lgaLinks }));
+  return rows.map((c) => ({ id: c.id, name: c.name, code: c.code, lgas: c._count.lgaLinks, composition: (c.composition as string[]) || [], collation: c.collation }));
 }
 
 // The set of LGA ids that fall inside an election's scope — the basis for
@@ -85,9 +91,24 @@ export async function scopeLgaIds(constituencyId: string): Promise<string[]> {
   return links.map((l) => l.lgaId);
 }
 
+// Typeahead across all constituencies (name or delimitation code), for the
+// public search + API. Returns each hit with its state and composition.
+export async function searchConstituencies(q: string, take = 20) {
+  const rows = await db.constituency.findMany({
+    where: { OR: [{ name: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }] },
+    select: { id: true, name: true, code: true, type: true, composition: true, state: { select: { name: true } } },
+    take,
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+  });
+  return rows.map((c) => ({
+    id: c.id, type: c.type, name: c.name, code: c.code, state: c.state.name,
+    composition: (c.composition as string[]) || [],
+  }));
+}
+
 export async function constituencySummary() {
   const rows = await db.constituency.groupBy({ by: ["stateId", "type"], _count: { _all: true } });
-  const byType = { SENATORIAL: 0, FEDERAL: 0 } as Record<string, number>;
+  const byType = { SENATORIAL: 0, FEDERAL: 0, STATE: 0 } as Record<string, number>;
   for (const r of rows) byType[r.type] = (byType[r.type] || 0) + r._count._all;
   const saved = await db.constituencyImport.findMany({ select: { key: true, count: true, importedAt: true } });
   return { byType, saved };
