@@ -6,6 +6,7 @@ import { planFor } from "@/app/api/public/scope/route";
 import { sendMail } from "@/lib/mailer";
 import { seedParties } from "@/lib/parties";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
+import { freeSeatsFor } from "@/lib/free-tier";
 
 export const runtime = "nodejs";
 
@@ -64,15 +65,7 @@ export async function POST(req: NextRequest) {
       adminEmails: [...new Set([email, ...SUPER_ADMINS])],
     },
   });
-  // Free tier = 20 agent codes per LGA in this election's scope. A constituency
-  // contest counts its member LGAs; a state contest counts the state's LGAs; a
-  // national contest counts all 774.
-  const lgaCount = scopeConstituencyId
-    ? await db.constituencyLga.count({ where: { constituencyId: scopeConstituencyId } })
-    : scopeStateId
-      ? await db.lga.count({ where: { stateId: scopeStateId } })
-      : await db.lga.count();
-  const freeSeats = 20 * Math.max(1, lgaCount);
+  const freeSeats = await freeSeatsFor({ scopeStateId, scopeConstituencyId });
   await db.subscription.create({ data: { electionId: election.id, freeSeats } });
   await seedParties(db, election.id); // standard INEC ballot; admin trims/edits
   await db.auditLog.create({ data: { actorType: "public", action: "tenant:create", entity: "Tenant", entityId: tenant.id, meta: { slug, email } } });

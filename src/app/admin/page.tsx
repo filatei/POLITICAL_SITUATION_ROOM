@@ -93,10 +93,28 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   }
   useEffect(() => { load(); }, []);
 
-  const filteredUnits = useMemo(() => {
+  // Polling-unit picker searches ALL units in the election's state server-side
+  // as the admin types (debounced). We optimistically show matches from the
+  // already-loaded set first, then replace them with the fuller server results.
+  const [unitResults, setUnitResults] = useState<Unit[]>([]);
+  const [unitSearching, setUnitSearching] = useState(false);
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setUnitResults([]); setUnitSearching(false); return; }
+    setUnitSearching(true);
+    const h = setTimeout(async () => {
+      const r = await api(`/api/admin/units?q=${encodeURIComponent(term)}`);
+      if (r.ok) setUnitResults((await r.json()).units || []);
+      setUnitSearching(false);
+    }, 250);
+    return () => clearTimeout(h);
+  }, [q]);
+  const displayUnits = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? units.filter((u) => u.label.toLowerCase().includes(s)) : units;
-  }, [units, q]);
+    if (s.length < 2) return [];
+    if (unitResults.length) return unitResults;
+    return units.filter((u) => u.label.toLowerCase().includes(s)).slice(0, 50); // optimistic
+  }, [q, unitResults, units]);
 
   async function createAgent() {
     if (!name.trim() || !unitId) return;
@@ -187,7 +205,9 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
     // Geography + Tenants = platform-wide, super-admins only.
     ...(isSuper ? [{ key: "geo" as const, label: "Geography" }, { key: "tenants" as const, label: "Tenants" }] : []),
     { key: "results", label: "Results" },
-    { key: "ai", label: "AI & Knowledge" },
+    // AI & Knowledge temporarily hidden from tenant admins (super-admins keep it
+    // for testing) until the analysis feature is finalized.
+    ...(isSuper ? [{ key: "ai" as const, label: "AI & Knowledge" }] : []),
     ...(isAdmin ? [{ key: "billing" as const, label: "Billing" }, { key: "settings" as const, label: "Settings" }] : []),
   ];
   const tabTitle: Record<AdminTab, string> = {
@@ -239,17 +259,20 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
             <div><label className="label">Google email (optional — lets them sign in with Google)</label><input className="input" value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} inputMode="email" placeholder="agent@gmail.com" /></div>
             <div>
               <label className="label">Polling unit {unitId && <span className="text-good">· selected</span>}</label>
-              <input className="input mb-2" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search unit / ward / LGA…" />
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
-                {filteredUnits.map((u) => (
-                  <button type="button" key={u.id} onClick={() => setUnitId(u.id)}
-                    className={`flex w-full items-center justify-between gap-2 border-b border-line/60 px-3 py-2 text-left text-sm last:border-0 ${unitId === u.id ? "bg-accent/15 font-semibold text-ink" : "text-muted hover:bg-ink/5"}`}>
-                    <span className="truncate">{u.label}</span>
-                    {u.agents ? <span className="pill shrink-0 bg-ink/10 text-muted">{u.agents}</span> : null}
-                  </button>
-                ))}
-                {!filteredUnits.length && <div className="px-3 py-3 text-sm text-muted">No matching units.</div>}
-              </div>
+              <input className="input mb-2" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search any unit / ward / LGA in the state…" />
+              {q.trim().length >= 2 && (
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
+                  {displayUnits.map((u) => (
+                    <button type="button" key={u.id} onClick={() => setUnitId(u.id)}
+                      className={`flex w-full items-center justify-between gap-2 border-b border-line/60 px-3 py-2 text-left text-sm last:border-0 ${unitId === u.id ? "bg-accent/15 font-semibold text-ink" : "text-muted hover:bg-ink/5"}`}>
+                      <span className="truncate">{u.label}</span>
+                      {u.agents ? <span className="pill shrink-0 bg-ink/10 text-muted">{u.agents}</span> : null}
+                    </button>
+                  ))}
+                  {!displayUnits.length && <div className="px-3 py-3 text-sm text-muted">{unitSearching ? "Searching…" : "No matching units."}</div>}
+                </div>
+              )}
+              {q.trim().length < 2 && <p className="text-[11px] text-muted">Type at least 2 characters to search all polling units in the state.</p>}
             </div>
             <button className="btn-primary w-full" disabled={busy || !name.trim() || !unitId} onClick={createAgent}>Generate access code</button>
           </div>
@@ -395,7 +418,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
         </div>
       )}
 
-      {tab === "ai" && (
+      {tab === "ai" && isSuper && (
         <div className="grid gap-4 p-5 lg:grid-cols-2">
           <section className="card p-5">
             <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">AI assistant — Act, app & field data</h2>
@@ -1368,8 +1391,8 @@ function TenantsPanel() {
   async function resetTenant(t: TenantRow) {
     const ok = await confirmDialog({
       title: `Reset "${t.electionName}"?`,
-      body: "This permanently deletes ALL messages, incidents, updates and scores for this room. Agents, the ballot and geography are kept.",
-      confirmText: "Reset room", danger: true,
+      body: "This permanently deletes ALL messages, incidents, updates, scores AND agent codes for this room — everything goes back to zero. The ballot and geography are kept.",
+      confirmText: "Reset to zero", danger: true,
     });
     if (!ok) return;
     setBusy(t.slug);
@@ -1378,7 +1401,7 @@ function TenantsPanel() {
       const j = await r.json();
       await alertDialog({
         title: r.ok ? "Reset done" : "Reset failed",
-        body: r.ok ? `Removed ${j.removed?.submissions || 0} submissions and ${j.removed?.instructions || 0} instructions.` : (j.error || "Reset failed."),
+        body: r.ok ? `Cleared ${j.removed?.submissions || 0} submissions, ${j.removed?.instructions || 0} instructions and ${j.removed?.agents || 0} codes.` : (j.error || "Reset failed."),
       });
     } finally { setBusy(""); load(); }
   }

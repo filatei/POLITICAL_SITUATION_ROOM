@@ -13,6 +13,7 @@ import { reconcilePending } from "./src/lib/billing-credit";
 import { paystackEnabled, squadEnabled } from "./src/lib/payments";
 import { ensureKnowledgeSeeded } from "./src/lib/knowledge";
 import { ensureDefaultTenant } from "./src/lib/tenant";
+import { backfillFreeSeats } from "./src/lib/free-tier";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT || 3200);
@@ -143,6 +144,11 @@ app.prepare().then(() => {
   // Wrap the existing election in a default tenant (ondogov2027) on first boot.
   ensureDefaultTenant()
     .then((r) => { if (r.created) console.log(`> default tenant created: ${r.slug}`); })
+    .catch(() => {});
+
+  // Bring legacy rooms (flat 10 free seats) up to the current 20-per-LGA tier.
+  backfillFreeSeats()
+    .then((r) => { if (r.updated) console.log(`> free-tier backfill: raised ${r.updated} subscription(s)`); })
     .catch(() => {});
 
   // Auto-reconcile billing: since a shared merchant's single webhook may live in

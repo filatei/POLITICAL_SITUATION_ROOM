@@ -10,12 +10,14 @@ async function resolve(slug: string) {
   return db.tenant.findUnique({ where: { slug: slug.toLowerCase() } });
 }
 
-// Wipe all activity for an election (messages, incidents, updates, scores,
-// instructions) — keeps the room, ballot, agents, geography and branding.
+// Full reset back to zero: wipe all activity (messages, incidents, updates,
+// scores, instructions) AND all agent codes — keeps the room, the ballot,
+// geography and branding. The election starts clean with fresh seats.
 async function resetActivity(electionId: string) {
   return db.$transaction([
-    db.submission.deleteMany({ where: { electionId } }), // cascades ScoreRecord + Media
+    db.submission.deleteMany({ where: { electionId } }),  // cascades ScoreRecord + Media
     db.instruction.deleteMany({ where: { electionId } }), // cascades InstructionReceipt
+    db.agent.deleteMany({ where: { electionId } }),       // clear all access codes → back to zero
   ]);
 }
 
@@ -27,8 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: { slug: strin
   if (body?.action !== "reset") return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   const t = await resolve(params.slug);
   if (!t) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
-  const [subs, ins] = await resetActivity(t.electionId);
-  return NextResponse.json({ ok: true, reset: true, removed: { submissions: subs.count, instructions: ins.count } });
+  const [subs, ins, ags] = await resetActivity(t.electionId);
+  return NextResponse.json({ ok: true, reset: true, removed: { submissions: subs.count, instructions: ins.count, agents: ags.count } });
 }
 
 // DELETE — remove the tenant, its election and ALL related data. Super-admin
