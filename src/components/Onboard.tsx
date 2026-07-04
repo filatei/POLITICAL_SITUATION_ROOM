@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ScopePlan = { level: string; needsState: boolean; needsConstituency: boolean; constituencyType: string | null; constituencyLabel: string | null };
 type Opt = { id: string; name: string };
@@ -31,6 +31,35 @@ async function shareLinks(text: string) {
     try { await (navigator as any).share({ title: "PSR situation room", text }); return; } catch { /* user cancelled — fall through to copy */ }
   }
   if (await copyToClipboard(text)) alert("Links copied — paste them into WhatsApp, email or SMS.");
+}
+
+// Searchable single-select (type to filter). Used for the State picker so the
+// 37 states are quick to find.
+function SearchSelect({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder?: string }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const filtered = q.trim() ? options.filter((o) => o.toLowerCase().includes(q.trim().toLowerCase())) : options;
+  return (
+    <div className="relative" ref={boxRef}>
+      <input className="input" value={open ? q : value} placeholder={value || placeholder || "Search…"}
+        onFocus={() => { setOpen(true); setQ(""); }} onChange={(e) => { setQ(e.target.value); setOpen(true); }} />
+      {open && (
+        <div className="absolute z-40 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-line bg-surface shadow-2xl">
+          {!filtered.length && <div className="px-3 py-2 text-sm text-muted">No match.</div>}
+          {filtered.map((o) => (
+            <button key={o} type="button" onClick={() => { onChange(o); setOpen(false); setQ(""); }}
+              className={`block w-full truncate px-3 py-2 text-left text-sm hover:bg-ink/5 ${o === value ? "font-semibold text-accent" : ""}`}>{o}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // One shareable link with a copy button.
@@ -162,10 +191,7 @@ export default function Onboard() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label">State</label>
-              <select className="input" value={stateName} onChange={(e) => setStateName(e.target.value)}>
-                <option value="">Select state…</option>
-                {states.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-              </select>
+              <SearchSelect value={stateName} onChange={setStateName} options={states.map((s) => s.name)} placeholder="Search state…" />
             </div>
             {plan.needsConstituency && (
               <div>
