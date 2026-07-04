@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const user = await db.user.findUnique({ where: { email: key } });
   if (user) {
     if (!user.googleSub && sub) await db.user.update({ where: { id: user.id }, data: { googleSub: sub } });
-    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId };
+    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId, tv: user.tokenVersion };
     return withToken(session);
   }
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     await db.agent.update({ where: { id: agent.id }, data: { inviteUsedAt: agent.inviteUsedAt ?? new Date(), status: "ACTIVE" } });
     const session: Session = {
       sub: agent.id, kind: "agent", name: agent.name, role: "AGENT",
-      scope: agent.scope, unitId: agent.pollingUnitId, electionId: agent.electionId,
+      scope: agent.scope, unitId: agent.pollingUnitId, electionId: agent.electionId, tv: agent.tokenVersion,
     };
     const unit = agent.pollingUnit
       ? { id: agent.pollingUnit.id, name: agent.pollingUnit.name,
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       update: { googleSub: sub ?? undefined, ...(name ? { name } : {}), ...(pinned ? { electionId: pinned } : {}) },
       create: { email: key, name: name || key, role: "ADMIN", googleSub: sub ?? null, electionId: pinned },
     });
-    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId };
+    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId, tv: user.tokenVersion };
     return withToken(session);
   }
 

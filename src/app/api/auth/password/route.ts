@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     role: user.role,
     scope: "NATIONAL",
     electionId: user.electionId,
+    tv: user.tokenVersion,
   };
   return withToken(session);
 }

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   for (let i = 0; i < 10 && (await db.agent.findUnique({ where: { inviteCode: code } })); i++) code = inviteCode();
   const a = await db.agent.update({
     where: { id: params.id },
-    data: { inviteCode: code, pinHash: null, inviteUsedAt: null, status: "INVITED" },
+    data: { inviteCode: code, pinHash: null, inviteUsedAt: null, status: "INVITED", tokenVersion: { increment: 1 } },
   });
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:reset", entity: "Agent", entityId: a.id } });
   return NextResponse.json({ ok: true, inviteCode: a.inviteCode });

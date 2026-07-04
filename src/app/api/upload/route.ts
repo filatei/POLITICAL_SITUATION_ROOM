@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { getSession } from "@/lib/auth";
+import { tokenIsCurrent } from "@/lib/token-guard";
 import { sniffMedia } from "@/lib/filetype";
 import { rateLimit } from "@/lib/ratelimit";
 
@@ -11,6 +12,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
   if (!s) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await tokenIsCurrent(s))) return NextResponse.json({ error: "Session expired — please sign in again." }, { status: 401 });
 
   // Per-uploader cap so one code can't fill the disk: 60 files / minute.
   if (!rateLimit(`upload:${s.sub}`, 60, 60_000))

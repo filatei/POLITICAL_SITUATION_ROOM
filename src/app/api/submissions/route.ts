@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { tokenIsCurrent } from "@/lib/token-guard";
 import { publish } from "@/lib/events";
 import { unitLabel } from "@/lib/geo";
 
@@ -34,6 +35,7 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
   if (!s) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await tokenIsCurrent(s))) return NextResponse.json({ error: "Session expired — please sign in again." }, { status: 401 });
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const b = parsed.data;

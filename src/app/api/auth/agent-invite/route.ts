@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const session: Session = {
     sub: agent.id, kind: "agent", name: agent.name, role: "AGENT",
-    scope: agent.scope, unitId: agent.pollingUnitId, electionId: agent.electionId,
+    scope: agent.scope, unitId: agent.pollingUnitId, electionId: agent.electionId, tv: agent.tokenVersion,
   };
   const unit = agent.pollingUnit
     ? { id: agent.pollingUnit.id, name: agent.pollingUnit.name,

@@ -6,6 +6,7 @@ import { createServer } from "http";
 import next from "next";
 import { Server as IOServer } from "socket.io";
 import { verifySession, type Session } from "./src/lib/auth";
+import { tokenIsCurrent } from "./src/lib/token-guard";
 import { subscribe } from "./src/lib/events";
 import { db } from "./src/lib/db";
 import { setIO, markOnline, markOffline, broadcastPresence, emitDashboard } from "./src/lib/realtime";
@@ -48,6 +49,8 @@ app.prepare().then(() => {
     const token = (socket.handshake.auth?.token as string) || cookieToken(socket.handshake.headers.cookie);
     const session = token ? await verifySession(token) : null;
     if (!session) return nextFn(new Error("unauthorized"));
+    // Reject reset/suspended agents whose token has been revoked.
+    if (!(await tokenIsCurrent(session))) return nextFn(new Error("revoked"));
     (socket.data as { session: Session }).session = session;
     nextFn();
   });

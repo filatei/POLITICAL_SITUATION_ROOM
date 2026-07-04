@@ -10,6 +10,7 @@ export type Session = {
   scope?: "NATIONAL" | "STATE" | "LGA" | "WARD" | "PU";
   unitId?: string | null;
   electionId?: string | null;
+  tv?: number; // token version — bumped on reset/suspend to revoke old JWTs
 };
 
 const secret = () => {

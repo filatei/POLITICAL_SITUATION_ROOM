@@ -303,6 +303,8 @@ model User {
   // Tenant binding: the election this staff member may administer. NULL = a
   // platform super-admin / global staff (not pinned to a single tenant).
   electionId   String?
+  // Bumped to invalidate all existing JWTs for this user (revocation).
+  tokenVersion Int      @default(0)
   createdAt    DateTime @default(now())
   submissions  Submission[]
   instructions Instruction[]
@@ -329,12 +331,15 @@ model Agent {
   inviteUsedAt  DateTime?
   pinHash       String?
   status        AgentStatus @default(INVITED)
+  // Bumped on reset/suspend to invalidate the agent's existing JWT (revocation).
+  tokenVersion  Int         @default(0)
   lastSeenAt    DateTime?
   createdAt     DateTime    @default(now())
   submissions   Submission[]
   receipts      InstructionReceipt[]
 
   @@index([electionId])
+  @@index([electionId, pollingUnitId])
 }
 
 model Submission {
