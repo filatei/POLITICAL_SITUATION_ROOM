@@ -8,6 +8,7 @@ import SearchSelect from "@/components/SearchSelect";
 import ThemeToggle from "@/components/ThemeToggle";
 import AiChat from "@/components/AiChat";
 import GeoSearch from "@/components/GeoSearch";
+import RootTenantGate from "@/components/RootTenantGate";
 import type { Session } from "@/lib/auth";
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
@@ -45,6 +46,10 @@ export default function AdminPage() {
         </div>
       </main>
     );
+  // The bare /admin root is reserved for super-admins. A tenant admin who lands
+  // here is redirected to their own room (or picks, if they own several).
+  const bareRoot = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/admin";
+  if (bareRoot) return <RootTenantGate base="admin"><Console session={session!} isSuper={isSuper} /></RootTenantGate>;
   return <Console session={session!} isSuper={isSuper} />;
 }
 
