@@ -8,7 +8,8 @@ import { useEffect, useRef, useState } from "react";
 // still show, even offline.
 export default function PartyBadge({ code, color, size = 24 }: { code: string; color: string; size?: number }) {
   const [stage, setStage] = useState(0);
-  const srcs = [`/uploads/party-logos/${code}.png`, `/party-logos/${code}.svg`];
+  // admin upload override -> bundled INEC logo (png) -> bundled svg -> acronym chip
+  const srcs = [`/uploads/party-logos/${code}.png`, `/party-logos/${code}.png`, `/party-logos/${code}.svg`];
   const loaded = useRef(false);
 
   useEffect(() => {
