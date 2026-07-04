@@ -18,10 +18,14 @@
          gap:2.2vmin; padding:6vmin; text-align:center; opacity:0; transform:translateY(2.5vmin) scale(.99);
          transition:opacity .6s ease, transform .6s ease; pointer-events:none}
   .scene.active{opacity:1; transform:none}
-  .eyebrow{font-size:2.1vmin; letter-spacing:.35em; text-transform:uppercase; color:var(--muted); font-weight:700}
-  h1{font-size:7.5vmin; line-height:1.02; font-weight:800; letter-spacing:-.02em}
-  h2{font-size:5.4vmin; line-height:1.05; font-weight:800; letter-spacing:-.01em}
-  .sub{font-size:2.7vmin; color:var(--muted); max-width:74vmin}
+  .eyebrow{font-size:clamp(11px,2.1vmin,20px); letter-spacing:.3em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:clamp(30px,7.5vmin,80px); line-height:1.02; font-weight:800; letter-spacing:-.02em}
+  h2{font-size:clamp(22px,5.4vmin,60px); line-height:1.05; font-weight:800; letter-spacing:-.01em}
+  .sub{font-size:clamp(14px,2.7vmin,28px); color:var(--muted); max-width:74vmin}
+  #full{position:fixed; z-index:20; right:2vmin; bottom:2.4vmin; display:flex; align-items:center; gap:.8vmin;
+        background:rgba(255,255,255,.10); border:1px solid var(--line); color:#fff; font-weight:800;
+        font-size:clamp(11px,1.9vmin,16px); padding:1.1vmin 1.8vmin; border-radius:99px; cursor:pointer}
+  :fullscreen #full, :-webkit-full-screen #full{display:none}
   .accent{color:var(--green)}
   .red{color:var(--red)}
   .logo{height:11vmin; width:auto; filter:drop-shadow(0 6px 30px rgba(239,68,68,.25))}
@@ -133,7 +137,19 @@
   </section>
 
 </div>
+<button id="full" aria-label="Fill screen"><span aria-hidden="true">⤢</span> Fill screen</button>
 <div id="bar"></div>
+
+<script>
+(function(){
+  var b=document.getElementById('full');
+  b.addEventListener('click', function(){
+    var el=document.documentElement;
+    if(el.requestFullscreen) el.requestFullscreen();
+    else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  });
+})();
+</script>
 
 <script>
 (function(){

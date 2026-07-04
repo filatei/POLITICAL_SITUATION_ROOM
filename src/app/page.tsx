@@ -7,6 +7,8 @@ import { getBrand } from "@/lib/brand";
 export const dynamic = "force-dynamic";
 // Defaults to the built-in animated explainer at /explainer.html. Override with
 // NEXT_PUBLIC_EXPLAINER_URL (a YouTube/Vimeo embed, an .mp4, or another page).
+import ExplainerEmbed from "@/components/ExplainerEmbed";
+
 const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "/explainer.html";
 const EXPLAINER_IS_VIDEO = /\.(mp4|webm|ogg)(\?|$)/i.test(EXPLAINER_URL);
 const EXPLAINER_IS_EMBED = EXPLAINER_URL.includes("youtube") || EXPLAINER_URL.includes("vimeo") || EXPLAINER_URL.endsWith(".html") || EXPLAINER_URL.startsWith("/");
@@ -72,19 +74,10 @@ export default async function Home() {
       {/* Explainer video */}
       <section className="mx-auto max-w-4xl px-5 pb-16">
         <h2 className="mb-4 text-center text-2xl font-bold tracking-tight sm:text-3xl">See it in action</h2>
-        <div className="overflow-hidden rounded-2xl border border-line bg-black">
-          {EXPLAINER_IS_VIDEO ? (
-            <video className="aspect-video w-full" src={EXPLAINER_URL} controls poster="/og.png" />
-          ) : EXPLAINER_IS_EMBED ? (
-            <div className="aspect-video"><iframe className="h-full w-full" src={EXPLAINER_URL} title="Explainer" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /></div>
-          ) : (
-            <div className="flex aspect-video flex-col items-center justify-center gap-2 text-center">
-              <div className="grid h-16 w-16 place-items-center rounded-full bg-accent/20 text-2xl text-accent">▶</div>
-              <div className="text-sm font-medium text-ink">Explainer</div>
-            </div>
-          )}
+        <div className="overflow-hidden rounded-2xl border border-line">
+          <ExplainerEmbed url={EXPLAINER_URL} isVideo={EXPLAINER_IS_VIDEO} isEmbed={EXPLAINER_IS_EMBED} />
         </div>
-        <p className="mt-3 text-center text-sm text-muted">One platform, any election — Presidential, Governorship, Senatorial, House of Reps, State Assembly, LG. White-labelled per client: your brand, your domain, your candidates.</p>
+        <p className="mt-3 text-center text-sm text-muted">Tap <b className="text-ink">Fullscreen</b> for the best view on mobile. One platform, any election — Presidential, Governorship, Senatorial, House of Reps, State Assembly, LG.</p>
       </section>
 
       {/* Features */}
