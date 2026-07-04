@@ -189,6 +189,23 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
     if (r.ok) { const j = await r.json(); setFlash(`New code: ${j.inviteCode}`); load(); }
   }
 
+  async function delAgent(a: Agent) {
+    const ok = await confirmDialog({
+      title: "Delete this code?",
+      body: `${a.name}\n${a.inviteCode} · ${a.unitLabel}\n\nThis permanently removes the code. Any reports already sent are kept but unlinked.`,
+      confirmText: "Delete", danger: true,
+    });
+    if (!ok) return;
+    try {
+      const r = await api(`/api/admin/agents/${a.id}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({} as any));
+      if (r.ok) { load(); setFlash(`Deleted ${a.inviteCode}`); }
+      else await alertDialog({ title: "Couldn’t delete", body: errText(j) || `Request failed (HTTP ${r.status}).` });
+    } catch {
+      await alertDialog({ title: "Network error", body: "Couldn’t reach the server. Try again." });
+    }
+  }
+
   async function saveRecipient() {
     if (!edit) return;
     const r = await api("/api/admin/agents", { method: "PATCH", body: JSON.stringify({ id: edit.id, name: edit.name, phone: edit.phone }) });
@@ -427,6 +444,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
                     <div className="flex items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
                       <button className="text-muted hover:text-ink" onClick={() => setEdit({ id: a.id, name: a.name, phone: a.phone || "" })}>Assign</button>
                       <button className="text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
+                      <button className="text-bad hover:brightness-125" onClick={() => delAgent(a)}>Delete</button>
                     </div>
                   </div>
                 )}
