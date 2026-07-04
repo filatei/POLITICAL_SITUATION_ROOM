@@ -13,8 +13,8 @@ export async function GET(req: NextRequest) {
   const election = await scopedElection();
   const agents = await db.agent.findMany({
     where: election ? { electionId: election.id } : {},
-    orderBy: { createdAt: "desc" }, take: 500,
-    include: { pollingUnit: { include: { ward: true, lga: true } } },
+    orderBy: { createdAt: "desc" }, take: 1000,
+    include: { pollingUnit: { include: { ward: true, lga: true, state: true } } },
   });
   return NextResponse.json({
     agents: agents.map((a) => ({
@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
       usedAt: a.inviteUsedAt, lastSeenAt: a.lastSeenAt,
       lgaId: a.pollingUnit?.lgaId ?? null,
       unit: a.pollingUnit?.name ?? null,
-      unitLabel: a.pollingUnit ? `${a.pollingUnit.name} · ${a.pollingUnit.ward.name} · ${a.pollingUnit.lga.name}` : "—",
+      lga: a.pollingUnit?.lga.name ?? null,
+      state: a.pollingUnit?.state.name ?? null,
+      unitLabel: a.pollingUnit ? `${a.pollingUnit.name} · ${a.pollingUnit.ward.name} · ${a.pollingUnit.lga.name} · ${a.pollingUnit.state.name}` : "—",
     })),
   });
 }

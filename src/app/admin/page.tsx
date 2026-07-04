@@ -23,7 +23,7 @@ function errText(j: any): string {
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
 type Lga = { id: string; name: string };
-type Agent = { id: string; name: string; phone?: string; email?: string | null; inviteCode: string; status: string; unitLabel: string; unit?: string | null; lgaId?: string | null; usedAt?: string | null; lastSeenAt?: string | null };
+type Agent = { id: string; name: string; phone?: string | null; email?: string | null; inviteCode: string; status: string; unitLabel: string; unit?: string | null; lga?: string | null; state?: string | null; lgaId?: string | null; usedAt?: string | null; lastSeenAt?: string | null };
 
 export default function AdminPage() {
   const [state, setState] = useState<"loading" | "in" | "out" | "denied">("loading");
@@ -206,7 +206,9 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
       if (agentFilter === "unused" && a.usedAt) return false;
       if (agentFilter === "active" && a.status !== "ACTIVE") return false;
       if (!s) return true;
-      return [a.name, a.inviteCode, a.unitLabel, a.email || ""].some((x) => x.toLowerCase().includes(s));
+      // Search by name, code, unit/ward/LGA/state (via label), LGA, state, phone, email.
+      return [a.name, a.inviteCode, a.unitLabel, a.lga || "", a.state || "", a.phone || "", a.email || ""]
+        .some((x) => x.toLowerCase().includes(s));
     });
   }, [agents, agentQ, agentFilter]);
 
@@ -307,7 +309,9 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
           </div>
         </section>
 
-        {/* Bulk generate — drill down LGA → Ward → Unit */}
+        {/* Bulk generate — drill down LGA → Ward → Unit. Super-admins only:
+            tenant admins register known agents individually. */}
+        {isSuper && (
         <section className="card p-5">
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Bulk: generate codes by area</h2>
           <div className="space-y-2">
@@ -374,14 +378,16 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
             </div>
           )}
         </section>
+        )}
 
-        {/* Agents / code history */}
-        <section className="card p-5">
+        {/* Agent management. When the super-only bulk panel is hidden this takes
+            the freed column so tenant admins get a roomier list. */}
+        <section className={`card p-5 ${isSuper ? "" : "lg:col-span-2"}`}>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Codes ({filteredAgents.length}/{agents.length})</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Agent management ({filteredAgents.length}/{agents.length})</h2>
             <button className="text-xs text-accent hover:underline" onClick={exportCsv}>Export CSV</button>
           </div>
-          <input className="input mb-2" value={agentQ} onChange={(e) => setAgentQ(e.target.value)} placeholder="Search name / code / unit / email…" />
+          <input className="input mb-2" value={agentQ} onChange={(e) => setAgentQ(e.target.value)} placeholder="Search name, phone, email, unit, LGA or state…" />
           <div className="mb-3 flex gap-1 rounded-lg border border-line bg-black/20 p-1 text-xs">
             {(["all", "unused", "active"] as const).map((f) => (
               <button key={f} onClick={() => setAgentFilter(f)}
