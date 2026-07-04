@@ -91,6 +91,20 @@ model Election {
   status    ElectionStatus @default(SETUP)
   createdAt DateTime       @default(now())
 
+  // Geographic scope of the contest. scopeLevel is derived from `type`:
+  //   PRESIDENTIAL      -> NATION      (whole country, no refs)
+  //   GOVERNORSHIP      -> STATE       (scopeStateId)
+  //   STATE_ASSEMBLY    -> STATE       (scopeStateId)   [state-wide monitoring]
+  //   LG_CHAIRMANSHIP   -> STATE       (scopeStateId; scopeLgaId optional)
+  //   SENATORIAL        -> SENATORIAL  (scopeStateId + scopeConstituencyId)
+  //   HOUSE_OF_REPS     -> FEDERAL     (scopeStateId + scopeConstituencyId)
+  scopeLevel        String        @default("STATE")
+  scopeStateId      String?
+  scopeState        State?        @relation(fields: [scopeStateId], references: [id])
+  scopeConstituencyId String?
+  scopeConstituency Constituency? @relation(fields: [scopeConstituencyId], references: [id])
+  scopeLgaId        String?
+
   parties      Party[]
   candidates   Candidate[]
   agents       Agent[]
@@ -134,6 +148,8 @@ model State {
   lgas  Lga[]
   units PollingUnit[]
   agents Agent[]
+  constituencies Constituency[]
+  elections Election[]
 }
 
 model Lga {
@@ -145,6 +161,7 @@ model Lga {
   wards   Ward[]
   units   PollingUnit[]
   agents  Agent[]
+  constituencyLinks ConstituencyLga[]
 
   @@unique([stateId, code])
 }
@@ -188,6 +205,53 @@ model GeoImport {
   state      String   @id // uppercase state name
   units      Int      @default(0)
   payload    Json // the harvested rows: [{ id, pu, delim, lga, ward }]
+  importedAt DateTime @updatedAt
+}
+
+// Electoral constituencies that group whole LGAs:
+//   SENATORIAL — 3 per state + FCT (109 senators)
+//   FEDERAL    — House of Reps federal constituencies (360)
+// Membership is LGA-level (senatorial & federal constituencies are composed of
+// whole LGAs). An election scoped to a constituency monitors only the polling
+// units inside these LGAs, so agents are provisioned to the correct units.
+model Constituency {
+  id        String            @id @default(cuid())
+  type      ConstituencyType
+  stateId   String
+  state     State             @relation(fields: [stateId], references: [id])
+  code      String? // INEC delimitation code if known
+  name      String
+  lgaLinks  ConstituencyLga[]
+  elections Election[]
+
+  @@unique([stateId, type, name])
+  @@index([stateId, type])
+}
+
+model ConstituencyLga {
+  id             String       @id @default(cuid())
+  constituencyId String
+  constituency   Constituency @relation(fields: [constituencyId], references: [id], onDelete: Cascade)
+  lgaId          String
+  lga            Lga          @relation(fields: [lgaId], references: [id], onDelete: Cascade)
+
+  @@unique([constituencyId, lgaId])
+  @@index([lgaId])
+}
+
+enum ConstituencyType {
+  SENATORIAL
+  FEDERAL
+}
+
+// Server-side backup of an imported constituency file, keyed by state+type, so
+// the constituency map can be rebuilt without re-uploading.
+model ConstituencyImport {
+  key        String   @id // e.g. "ONDO:SENATORIAL"
+  state      String
+  type       String
+  count      Int      @default(0)
+  payload    Json // [{ name, code?, lgas: [lgaName] }]
   importedAt DateTime @updatedAt
 }
 

@@ -65,17 +65,6 @@ export default async function Home() {
         <Onboard />
       </section>
 
-      {/* Admin sign-in for existing tenants. Agents & the situation room are
-          reached only via invites issued by the tenant's admin. */}
-      <section className="mx-auto max-w-md px-5 pb-16">
-        <h2 className="mb-4 text-center text-sm font-semibold uppercase tracking-wider text-muted">Already run a room?</h2>
-        <Link href="/admin" className="card block p-6 text-center transition hover:-translate-y-0.5 hover:ring-1 hover:ring-accent/40">
-          <div className="text-lg font-semibold">Admin sign-in</div>
-          <p className="mt-1 text-sm text-muted">Enrol agents, generate invite codes, manage geography, verify and override results. Agents and coordinators join through the invites you send them.</p>
-          <div className="mt-4 text-sm font-medium text-accent">Open admin →</div>
-        </Link>
-      </section>
-
       {/* Explainer video */}
       <section className="mx-auto max-w-4xl px-5 pb-16">
         <h2 className="mb-4 text-center text-2xl font-bold tracking-tight sm:text-3xl">See it in action</h2>
@@ -219,7 +208,6 @@ export default async function Home() {
               <Link href="/terms" className="hover:text-ink">Terms</Link>
               <Link href="/privacy" className="hover:text-ink">Privacy</Link>
               <a href="#contact" className="hover:text-ink">Contact</a>
-              <Link href="/admin" className="hover:text-ink">Admin</Link>
             </nav>
           </div>
           <div className="mt-6 border-t border-line pt-6 text-xs text-muted">

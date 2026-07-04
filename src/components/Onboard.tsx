@@ -1,5 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type ScopePlan = { level: string; needsState: boolean; needsConstituency: boolean; constituencyType: string | null; constituencyLabel: string | null };
+type Opt = { id: string; name: string };
+type CItem = { id: string; name: string; code: string | null; lgas: number };
 
 const TYPES: [string, string][] = [
   ["GOVERNORSHIP", "Governorship"],
@@ -49,6 +53,11 @@ function LinkRow({ label, url }: { label: string; url: string }) {
 export default function Onboard() {
   const [name, setName] = useState("");
   const [type, setType] = useState("GOVERNORSHIP");
+  const [plan, setPlan] = useState<ScopePlan | null>(null);
+  const [states, setStates] = useState<Opt[]>([]);
+  const [stateName, setStateName] = useState("");
+  const [consts, setConsts] = useState<CItem[]>([]);
+  const [constId, setConstId] = useState("");
   const [slug, setSlug] = useState("");
   const [touched, setTouched] = useState(false);
   const [email, setEmail] = useState("");
@@ -59,12 +68,33 @@ export default function Onboard() {
 
   const effSlug = touched ? slug : slugify(name);
 
+  // Load the scope plan + state list whenever the election type changes.
+  useEffect(() => {
+    setConstId("");
+    fetch(`/api/public/scope?type=${type}`).then((r) => r.json()).then((j) => {
+      setPlan(j.plan); setStates(j.states || []);
+    }).catch(() => setPlan(null));
+  }, [type]);
+
+  // Load the district/constituency options once a state is chosen.
+  useEffect(() => {
+    setConstId("");
+    if (!plan?.needsConstituency || !stateName) { setConsts([]); return; }
+    fetch(`/api/public/scope?type=${type}&state=${encodeURIComponent(stateName)}`).then((r) => r.json())
+      .then((j) => setConsts(j.constituencies || [])).catch(() => setConsts([]));
+  }, [type, stateName, plan?.needsConstituency]);
+
+  const scopeReady = !plan
+    || (!plan.needsState && !plan.needsConstituency)
+    || (plan.needsState && !plan.needsConstituency && !!stateName)
+    || (plan.needsConstituency && !!stateName && !!constId);
+
   async function submit() {
     setBusy(true); setErr("");
     try {
       const r = await fetch("/api/onboard", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ electionName: name, electionType: type, slug: effSlug, contactEmail: email, contactPhone: phone }),
+        body: JSON.stringify({ electionName: name, electionType: type, slug: effSlug, contactEmail: email, contactPhone: phone, scopeState: plan?.needsState ? stateName : "", scopeConstituencyId: plan?.needsConstituency ? constId : "" }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error?.formErrors?.[0] || (typeof j.error === "string" ? j.error : "") || "Could not create your room.");
@@ -122,11 +152,41 @@ export default function Onboard() {
             </div>
           </div>
         </div>
+        {/* Scope — depends on election type */}
+        {plan && plan.level === "NATION" && (
+          <div className="rounded-lg border border-line bg-white/[0.03] px-3 py-2 text-sm text-muted">
+            Nationwide contest — monitors all 36 states and the FCT.
+          </div>
+        )}
+        {plan && plan.needsState && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label">State</label>
+              <select className="input" value={stateName} onChange={(e) => setStateName(e.target.value)}>
+                <option value="">Select state…</option>
+                {states.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+            </div>
+            {plan.needsConstituency && (
+              <div>
+                <label className="label">{plan.constituencyLabel}</label>
+                <select className="input" value={constId} onChange={(e) => setConstId(e.target.value)} disabled={!stateName || !consts.length}>
+                  <option value="">{!stateName ? "Choose a state first" : consts.length ? "Select…" : "None warehoused yet"}</option>
+                  {consts.map((c) => <option key={c.id} value={c.id}>{c.name}{c.lgas ? ` (${c.lgas} LGAs)` : ""}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+        {plan && plan.needsConstituency && stateName && !consts.length && (
+          <p className="text-[11px] text-warn">No {plan.constituencyLabel?.toLowerCase()} imported for {stateName} yet. A super-admin can import them under Admin → Geography.</p>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="label">Contact email (admin)</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="you@org.ng" /></div>
           <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
         </div>
-        <button className="btn-primary w-full" disabled={busy || name.trim().length < 3 || !email.trim()} onClick={submit}>
+        <button className="btn-primary w-full" disabled={busy || name.trim().length < 3 || !email.trim() || !scopeReady} onClick={submit}>
           {busy ? "Creating…" : "Create my situation room (10 seats free)"}
         </button>
         <p className="text-center text-[11px] text-muted">Free to start with 10 agent seats. Add more seats (₦10,000 each) any time from your admin.</p>

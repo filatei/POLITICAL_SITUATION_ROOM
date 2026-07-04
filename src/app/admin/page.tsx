@@ -5,6 +5,7 @@ import RoomLogin from "@/components/RoomLogin";
 import QrModal from "@/components/QrModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import AiChat from "@/components/AiChat";
+import GeoSearch from "@/components/GeoSearch";
 import type { Session } from "@/lib/auth";
 
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
@@ -630,6 +631,12 @@ function GeoConsole({ onFlash, onOpenAgent }: { onFlash: (s: string) => void; on
         </h2>
         {!detail && <button className="btn-ghost px-2.5 py-1 text-xs" onClick={() => setShowAdd((v) => !v)}>{showAdd ? "Close" : "+ Add manually"}</button>}
       </div>
+
+      {!detail && (
+        <div className="mb-3">
+          <GeoSearch placeholder="Jump to a polling unit, ward or LGA…" onPick={(h) => { if (h.type === "unit") openUnit({ id: h.id } as any); else onFlash(`${h.type.toUpperCase()}: ${[h.state, h.lga, h.name].filter(Boolean).join(" › ")}`); }} />
+        </div>
+      )}
 
       {!detail && showAdd && (
         <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 p-3">

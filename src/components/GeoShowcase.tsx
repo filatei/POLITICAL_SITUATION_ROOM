@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import GeoSearch from "@/components/GeoSearch";
 
 type GState = { name: string; lgas: number; wards: number; units: number };
 type GLga = { name: string; wards: number; units: number };
@@ -17,15 +18,54 @@ const LAYOUT: Record<string, [number, number]> = {
   LAGOS: [7, 0], DELTA: [7, 2], BAYELSA: [7, 3], RIVERS: [7, 4], "AKWA IBOM": [7, 6],
 };
 
+// --- Optional real-boundary map: renders if /nigeria-states.geojson exists ---
+function featureName(f: any): string {
+  const p = f.properties || {};
+  return String(p.state || p.name || p.NAME_1 || p.admin1Name || p.STATE || p.state_name || "");
+}
+function ringsOf(geom: any): number[][][] {
+  if (!geom) return [];
+  if (geom.type === "Polygon") return geom.coordinates;
+  if (geom.type === "MultiPolygon") return geom.coordinates.flat();
+  return [];
+}
+function normState(n: string): string {
+  const s = (n || "").toUpperCase().trim();
+  if (s.includes("CAPITAL") || s === "ABUJA" || s === "FCT ABUJA") return "FCT";
+  return s.replace("NASSARAWA", "NASARAWA");
+}
+function buildMap(geo: any) {
+  const feats = geo?.features || [];
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const f of feats) for (const ring of ringsOf(f.geometry)) for (const pt of ring) {
+    const [x, y] = pt; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (!isFinite(minX)) return null;
+  const s = 1000 / Math.max(maxX - minX, maxY - minY);
+  const px = (x: number) => (x - minX) * s;
+  const py = (y: number) => (maxY - y) * s; // flip
+  const shapes = feats.map((f: any) => {
+    let d = "";
+    for (const ring of ringsOf(f.geometry)) d += "M" + ring.map((pt: number[]) => `${px(pt[0]).toFixed(1)},${py(pt[1]).toFixed(1)}`).join("L") + "Z";
+    return { name: featureName(f), d };
+  });
+  return { shapes, vw: (maxX - minX) * s, vh: (maxY - minY) * s };
+}
+
 export default function GeoShowcase() {
   const [totals, setTotals] = useState<{ states: number; lgas: number; wards: number; units: number } | null>(null);
   const [states, setStates] = useState<GState[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [lgasBy, setLgasBy] = useState<Record<string, GLga[]>>({});
+  const [geo, setGeo] = useState<any>(null);
 
   useEffect(() => {
     fetch("/api/public/geo").then((r) => r.json()).then((j) => { setTotals(j.totals); setStates(j.states || []); }).catch(() => {});
+    // Optional real boundaries — add public/nigeria-states.geojson to enable.
+    fetch("/nigeria-states.geojson").then((r) => (r.ok ? r.json() : null)).then((g) => g && setGeo(g)).catch(() => {});
   }, []);
+
+  const map = useMemo(() => (geo ? buildMap(geo) : null), [geo]);
 
   const byName = useMemo(() => new Map(states.map((s) => [s.name.toUpperCase(), s])), [states]);
   const maxUnits = useMemo(() => Math.max(1, ...states.map((s) => s.units)), [states]);
@@ -45,6 +85,11 @@ export default function GeoShowcase() {
 
   return (
     <div>
+      <div className="mb-6">
+        <GeoSearch placeholder="Find your polling unit, ward or LGA…" onPick={(h) => { if (byName.has(h.state.toUpperCase())) select(h.state); }} />
+        <p className="mt-1 text-[11px] text-muted">Type your polling unit, ward or LGA — results show the full State › LGA › Ward › Unit path.</p>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map(([k, v]) => (
           <div key={k} className="card p-4 text-center">
@@ -55,7 +100,29 @@ export default function GeoShowcase() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-        {/* Tile map */}
+        {/* Real boundary choropleth when public/nigeria-states.geojson is present */}
+        {map ? (
+          <div>
+            <svg viewBox={`0 0 ${map.vw.toFixed(0)} ${map.vh.toFixed(0)}`} className="w-full" style={{ maxHeight: 460 }}>
+              {map.shapes.map((sh, i) => {
+                const st = byName.get(normState(sh.name));
+                const active = st && sel === st.name;
+                return (
+                  <path key={i} d={sh.d}
+                    fill={st ? shade(st.units) : "rgb(var(--line) / 0.15)"}
+                    stroke={active ? "rgb(var(--accent))" : "rgb(var(--line) / 0.6)"}
+                    strokeWidth={active ? 2 : 0.6}
+                    style={{ cursor: st ? "pointer" : "default" }}
+                    onClick={() => st && select(st.name)}>
+                    <title>{st ? `${st.name}: ${st.lgas} LGAs · ${st.units.toLocaleString()} units` : sh.name}</title>
+                  </path>
+                );
+              })}
+            </svg>
+            <p className="mt-2 text-[11px] text-muted">Shaded by polling-unit density (INEC). Tap a state.</p>
+          </div>
+        ) : (
+        /* Tile map fallback */
         <div className="overflow-x-auto">
           <div className="grid min-w-[560px] gap-1.5" style={{ gridTemplateColumns: "repeat(8, minmax(0, 1fr))", gridTemplateRows: "repeat(8, 1fr)" }}>
             {Object.entries(LAYOUT).map(([name, [r, c]]) => {
@@ -74,6 +141,7 @@ export default function GeoShowcase() {
           </div>
           <p className="mt-2 text-[11px] text-muted">Shaded by polling-unit density. Schematic tile map — tap a state.</p>
         </div>
+        )}
 
         {/* Selected state's LGAs */}
         <div>
