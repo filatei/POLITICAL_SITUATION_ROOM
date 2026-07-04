@@ -1,13 +1,20 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { saveAuth } from "@/lib/session";
+import { tenantFromPath } from "@/lib/tenant-path";
 
 type Tab = "invite" | "google";
 type Phase = "form" | "signing" | "done";
 
 export default function AgentLoginClient() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { base } = tenantFromPath(pathname);
+  useEffect(() => {
+    // A bare /agent/login (no tenant slug) isn't a valid entry — send to landing.
+    if (pathname.replace(/\/+$/, "") === "/agent/login") router.replace("/");
+  }, [pathname, router]);
   const [tab, setTab] = useState<Tab>("invite");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,7 +39,7 @@ export default function AgentLoginClient() {
     saveAuth(j.token, j.session, j.unit);
     setWho(j.session?.name || j.unit?.name || "agent");
     setPhase("done");
-    setTimeout(() => router.push("/agent"), 950);
+    setTimeout(() => router.push(`${base}/agent`), 950);
   }
 
   async function doInvite(codeArg?: string) {

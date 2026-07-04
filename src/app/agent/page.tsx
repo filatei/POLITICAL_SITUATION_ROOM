@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { tenantFromPath } from "@/lib/tenant-path";
 import { v4 as uuid } from "uuid";
 import { api, logout, getToken, getSessionLocal } from "@/lib/session";
 import { compressImage } from "@/lib/media";
@@ -75,6 +76,10 @@ async function getGeo(): Promise<{ lat?: number; lng?: number }> {
 
 export default function AgentHome() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { base } = tenantFromPath(pathname);
+  const bareAgent = pathname.replace(/\/+$/, "") === "/agent"; // no tenant slug → not allowed
+  const loginPath = `${base}/agent/login`;
   const online = useOnline();
   const [mode, setMode] = useState<Mode>("update");
   const [election, setElection] = useState<any>(null);
@@ -101,9 +106,10 @@ export default function AgentHome() {
   }
 
   useEffect(() => {
-    if (!getToken()) { router.replace("/agent/login"); return; }
+    if (bareAgent) { router.replace("/"); return; }          // bare /agent isn't a valid entry
+    if (!getToken()) { router.replace(loginPath); return; }
     api("/api/bootstrap").then(async (r) => {
-      if (r.status === 401) { router.replace("/agent/login"); return; }
+      if (r.status === 401) { router.replace(loginPath); return; }
       const j = await r.json();
       setElection(j.election); setCands(j.candidates || []); setUnit(j.unit || null);
     });
@@ -376,15 +382,15 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
               <div className="text-sm font-bold">{c.party}</div>
               <div className="truncate text-xs text-muted">{c.name}</div>
             </div>
-            <input className="input w-24 text-right text-lg font-semibold" inputMode="numeric" value={votes[c.id] || ""}
-              onChange={(e) => setVotes({ ...votes, [c.id]: e.target.value })} placeholder="0" />
+            <input className="input w-24 text-right text-lg font-semibold" inputMode="numeric" pattern="[0-9]*" value={votes[c.id] || ""}
+              onChange={(e) => setVotes({ ...votes, [c.id]: e.target.value.replace(/[^0-9]/g, "") })} placeholder="0" />
           </div>
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <div><label className="label">Accredited</label><input className="input" inputMode="numeric" value={accredited} onChange={(e) => setAccredited(e.target.value)} /></div>
-        <div><label className="label">Votes cast</label><input className="input" inputMode="numeric" value={cast} onChange={(e) => setCast(e.target.value)} /></div>
-        <div><label className="label">Rejected</label><input className="input" inputMode="numeric" value={rejected} onChange={(e) => setRejected(e.target.value)} /></div>
+        <div><label className="label">Accredited</label><input className="input" inputMode="numeric" pattern="[0-9]*" value={accredited} onChange={(e) => setAccredited(e.target.value.replace(/[^0-9]/g, ""))} /></div>
+        <div><label className="label">Votes cast</label><input className="input" inputMode="numeric" pattern="[0-9]*" value={cast} onChange={(e) => setCast(e.target.value.replace(/[^0-9]/g, ""))} /></div>
+        <div><label className="label">Rejected</label><input className="input" inputMode="numeric" pattern="[0-9]*" value={rejected} onChange={(e) => setRejected(e.target.value.replace(/[^0-9]/g, ""))} /></div>
       </div>
       <div className="flex items-center gap-2">
         <select className="input flex-1" value={confidence} onChange={(e) => setConfidence(e.target.value as any)}>

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { tenantFromPath } from "@/lib/tenant-path";
 
 // Shows a scannable QR that opens the agent login with the code pre-filled:
 //   {origin}/agent/login?code=OND-XXXXX
@@ -19,7 +20,10 @@ export default function QrModal({ code, label, onClose, onCopy }: {
   }
 
   useEffect(() => {
-    const url = `${window.location.origin}/agent/login?code=${encodeURIComponent(code)}`;
+    // Agent links live under the tenant slug (/{slug}/agent/login), derived from
+    // the admin URL we're currently on.
+    const { base } = tenantFromPath(window.location.pathname);
+    const url = `${window.location.origin}${base}/agent/login?code=${encodeURIComponent(code)}`;
     setLoginUrl(url);
     QRCode.toDataURL(url, { width: 360, margin: 1, errorCorrectionLevel: "M", color: { dark: "#0a0a0a", light: "#ffffff" } })
       .then(setPng)

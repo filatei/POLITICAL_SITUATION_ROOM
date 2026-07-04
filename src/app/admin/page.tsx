@@ -5,6 +5,7 @@ import RoomLogin from "@/components/RoomLogin";
 import QrModal from "@/components/QrModal";
 import { confirmDialog, alertDialog, promptDialog } from "@/components/Dialog";
 import SearchSelect from "@/components/SearchSelect";
+import { tenantFromPath } from "@/lib/tenant-path";
 import ThemeToggle from "@/components/ThemeToggle";
 import AiChat from "@/components/AiChat";
 import GeoSearch from "@/components/GeoSearch";
@@ -242,6 +243,8 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   // The bare /admin is the platform super-console (no tenant scoped); a tenant
   // admin lives at /{slug}/admin. Only show a specific election name for the latter.
   const superConsole = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/admin";
+  // Tenant-relative base ("/{slug}") so Dashboard + invite links stay in-tenant.
+  const tenantBase = typeof window !== "undefined" ? tenantFromPath(window.location.pathname).base : "";
   const [electionName, setElectionName] = useState("");
   useEffect(() => {
     if (superConsole) return;
@@ -276,7 +279,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
-          <a href="/room" className="btn-ghost px-3 py-1.5 text-sm">Dashboard</a>
+          <a href={`${tenantBase}/room`} className="btn-ghost px-3 py-1.5 text-sm">Dashboard</a>
         </div>
       </header>
       {/* Compact election name on mobile, below the top bar. */}
@@ -903,6 +906,7 @@ type ActSub = { id: string; type: string; text?: string; severity?: string; conf
 function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; onClose: () => void; onFlash: (s: string) => void; onQr: (code: string, label?: string) => void; onCopy: (t: string) => void }) {
   const [data, setData] = useState<{ agent: any; counts: any; submissions: ActSub[] } | null>(null);
   const [edit, setEdit] = useState<{ name: string; phone: string } | null>(null);
+  const tenantBase = typeof window !== "undefined" ? tenantFromPath(window.location.pathname).base : "";
 
   async function load() { const r = await api(`/api/admin/agents/${id}/activity`); if (r.ok) setData(await r.json()); }
   useEffect(() => { load(); }, [id]); // eslint-disable-line
@@ -940,7 +944,7 @@ function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; 
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="btn-ghost text-xs" onClick={() => onCopy(a.inviteCode)}>Copy code</button>
               <button className="btn-ghost text-xs" onClick={() => onQr(a.inviteCode, `${a.name} · ${a.unitLabel}`)}>Show QR</button>
-              <button className="btn-ghost text-xs" onClick={() => onCopy(`${window.location.origin}/agent/login?code=${a.inviteCode}`)}>Copy login link</button>
+              <button className="btn-ghost text-xs" onClick={() => onCopy(`${window.location.origin}${tenantBase}/agent/login?code=${a.inviteCode}`)}>Copy login link</button>
               <button className="btn-ghost text-xs" onClick={() => setEdit({ name: a.name, phone: a.phone || "" })}>Assign recipient</button>
             </div>
             {edit && (
