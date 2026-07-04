@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { alertDialog } from "@/components/Dialog";
 
 type ScopePlan = { level: string; needsState: boolean; needsConstituency: boolean; constituencyType: string | null; constituencyLabel: string | null };
 type Opt = { id: string; name: string };
@@ -30,7 +31,7 @@ async function shareLinks(text: string) {
   if (typeof navigator !== "undefined" && (navigator as any).share) {
     try { await (navigator as any).share({ title: "PSR situation room", text }); return; } catch { /* user cancelled — fall through to copy */ }
   }
-  if (await copyToClipboard(text)) alert("Links copied — paste them into WhatsApp, email or SMS.");
+  if (await copyToClipboard(text)) await alertDialog({ title: "Copied", body: "Links copied — paste them into WhatsApp, email or SMS." });
 }
 
 // Searchable single-select (type to filter). Used for the State picker so the

@@ -18,5 +18,8 @@ RUN npm run build
 ENV NODE_ENV=production
 ENV PORT=3200
 EXPOSE 3200
-# npm start runs `tsx server.ts` (Next + Socket.IO on one port).
-CMD ["npm", "start"]
+# On boot, sync the DB to the schema (additive `db push`) so a deploy that adds
+# tables/columns doesn't leave prod out of sync → 500s. Non-fatal: if the push
+# can't run we still start (same as before), and it's logged.
+# Then `npm start` runs the Next + Socket.IO custom server on one port.
+CMD ["sh", "-c", "npx prisma db push --skip-generate || echo 'WARN: prisma db push failed — starting anyway'; npm start"]

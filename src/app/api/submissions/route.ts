@@ -48,30 +48,45 @@ export async function POST(req: NextRequest) {
   // Agents can only file for their own unit.
   const pollingUnitId = s.kind === "agent" ? s.unitId ?? undefined : b.pollingUnitId;
 
-  const created = await db.submission.create({
-    data: {
-      clientUid: b.clientUid,
-      electionId: election.id,
-      type: b.type,
-      channel: b.channel,
-      text: b.text,
-      severity: b.severity,
-      agentId: s.kind === "agent" ? s.sub : undefined,
-      userId: s.kind === "user" ? s.sub : undefined,
-      pollingUnitId: pollingUnitId,
-      accreditedVoters: b.accreditedVoters,
-      totalVotesCast: b.totalVotesCast,
-      rejectedBallots: b.rejectedBallots,
-      confidence: b.confidence,
-      sheetSigned: b.sheetSigned,
-      capturedAt: b.capturedAt ? new Date(b.capturedAt) : new Date(),
-      lat: b.lat,
-      lng: b.lng,
-      scores: b.scores ? { create: b.scores.map((x) => ({ candidateId: x.candidateId, votes: x.votes })) } : undefined,
-      media: b.media ? { create: b.media } : undefined,
-    },
-    include: { agent: true, user: true, scores: { include: { candidate: { include: { party: true } } } }, media: true },
-  });
+  let created;
+  try {
+    created = await db.submission.create({
+      data: {
+        clientUid: b.clientUid,
+        electionId: election.id,
+        type: b.type,
+        channel: b.channel,
+        text: b.text,
+        severity: b.severity,
+        agentId: s.kind === "agent" ? s.sub : undefined,
+        userId: s.kind === "user" ? s.sub : undefined,
+        pollingUnitId: pollingUnitId,
+        accreditedVoters: b.accreditedVoters,
+        totalVotesCast: b.totalVotesCast,
+        rejectedBallots: b.rejectedBallots,
+        confidence: b.confidence,
+        sheetSigned: b.sheetSigned,
+        capturedAt: b.capturedAt ? new Date(b.capturedAt) : new Date(),
+        lat: b.lat,
+        lng: b.lng,
+        scores: b.scores ? { create: b.scores.map((x) => ({ candidateId: x.candidateId, votes: x.votes })) } : undefined,
+        media: b.media ? { create: b.media } : undefined,
+      },
+      include: { agent: true, user: true, scores: { include: { candidate: { include: { party: true } } } }, media: true },
+    });
+  } catch (e) {
+    // Permanent DATA errors (bad foreign key, duplicate, missing relation) mean
+    // this exact payload will never save — return 422 so the client discards it
+    // instead of retrying forever. Everything else (connection loss, missing
+    // table/column from a pending migration, etc.) falls through to a 500 so the
+    // agent's report is retried and not lost once the server is healthy again.
+    const permanent = ["P2002", "P2003", "P2000", "P2005", "P2006", "P2011", "P2025"];
+    const code = (e as { code?: string })?.code;
+    if (code && permanent.includes(code)) {
+      return NextResponse.json({ error: `Submission references invalid data (${code}).` }, { status: 422 });
+    }
+    throw e; // transient/infra → 500 → client retries
+  }
 
   const label = await unitLabel(created.pollingUnitId);
   const wire = {

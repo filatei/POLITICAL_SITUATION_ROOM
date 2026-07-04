@@ -3,6 +3,7 @@ import "./globals.css";
 import SWRegister from "@/components/SWRegister";
 import InstallPrompt from "@/components/InstallPrompt";
 import { BrandProvider } from "@/components/BrandProvider";
+import { DialogHost } from "@/components/Dialog";
 import { getBrand } from "@/lib/brand";
 import { SITE_URL } from "@/lib/site";
 
@@ -52,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </BrandProvider>
         <SWRegister />
         <InstallPrompt />
+        <DialogHost />
       </body>
     </html>
   );

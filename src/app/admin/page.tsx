@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, logout } from "@/lib/session";
 import RoomLogin from "@/components/RoomLogin";
 import QrModal from "@/components/QrModal";
+import { confirmDialog, alertDialog, promptDialog } from "@/components/Dialog";
 import ThemeToggle from "@/components/ThemeToggle";
 import AiChat from "@/components/AiChat";
 import GeoSearch from "@/components/GeoSearch";
@@ -959,7 +960,12 @@ function WarehouseCard({ onFlash }: { onFlash: (s: string) => void }) {
   }
 
   async function rebuild() {
-    if (!window.confirm(`Rebuild the warehouse from ${saved.length} server-side backup(s)? This re-applies every saved state.`)) return;
+    const ok = await confirmDialog({
+      title: "Rebuild warehouse?",
+      body: `Rebuild from ${saved.length} server-side backup(s)? This re-applies every saved state.`,
+      confirmText: "Rebuild",
+    });
+    if (!ok) return;
     setBusy("rebuild");
     const r = await api("/api/admin/geo/rebuild", { method: "POST" });
     const j = await r.json();
@@ -1314,22 +1320,34 @@ function TenantsPanel() {
   useEffect(() => { load(); }, []);
 
   async function resetTenant(t: TenantRow) {
-    if (!window.confirm(`Reset "${t.electionName}"?\n\nThis permanently deletes ALL messages, incidents, updates and scores for this room. Agents, the ballot and geography are kept.`)) return;
+    const ok = await confirmDialog({
+      title: `Reset "${t.electionName}"?`,
+      body: "This permanently deletes ALL messages, incidents, updates and scores for this room. Agents, the ballot and geography are kept.",
+      confirmText: "Reset room", danger: true,
+    });
+    if (!ok) return;
     setBusy(t.slug);
     try {
       const r = await api(`/api/admin/tenants/${t.slug}`, { method: "POST", body: JSON.stringify({ action: "reset" }) });
       const j = await r.json();
-      window.alert(r.ok ? `Reset done — removed ${j.removed?.submissions || 0} submissions and ${j.removed?.instructions || 0} instructions.` : (j.error || "Reset failed."));
+      await alertDialog({
+        title: r.ok ? "Reset done" : "Reset failed",
+        body: r.ok ? `Removed ${j.removed?.submissions || 0} submissions and ${j.removed?.instructions || 0} instructions.` : (j.error || "Reset failed."),
+      });
     } finally { setBusy(""); load(); }
   }
   async function deleteTenant(t: TenantRow) {
-    const typed = window.prompt(`This PERMANENTLY deletes "${t.electionName}" and ALL its data (agents, scores, everything).\n\nType the slug to confirm:\n${t.slug}`);
-    if (typed !== t.slug) { if (typed !== null) window.alert("Slug did not match — nothing deleted."); return; }
+    const typed = await promptDialog({
+      title: `Delete "${t.electionName}"?`,
+      body: `This PERMANENTLY deletes the room and ALL its data (agents, scores, everything). Type the slug to confirm:\n${t.slug}`,
+      placeholder: t.slug, confirmText: "Delete permanently", danger: true,
+    });
+    if (typed !== t.slug) { if (typed !== null) await alertDialog({ title: "Nothing deleted", body: "Slug did not match." }); return; }
     setBusy(t.slug);
     try {
       const r = await api(`/api/admin/tenants/${t.slug}?confirm=${encodeURIComponent(t.slug)}`, { method: "DELETE" });
       const j = await r.json();
-      window.alert(r.ok ? `Deleted ${t.slug}.` : (j.error || "Delete failed."));
+      await alertDialog({ title: r.ok ? "Deleted" : "Delete failed", body: r.ok ? `Deleted ${t.slug}.` : (j.error || "Delete failed.") });
     } finally { setBusy(""); load(); }
   }
   const filtered = q.trim() ? rows.filter((t) => (t.name + " " + t.slug + " " + (t.contactEmail || "")).toLowerCase().includes(q.trim().toLowerCase())) : rows;
