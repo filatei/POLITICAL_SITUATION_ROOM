@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, requireRole } from "@/lib/auth";
+import { sessionIsSuper } from "@/lib/tenant";
 import { importUnits, warehouseSummary, RawUnit } from "@/lib/geo-warehouse";
 
 export const runtime = "nodejs";
@@ -10,7 +11,7 @@ export const maxDuration = 300;
 // lga/ward/delim. ADMIN-gated. Used because the server itself can't reach INEC.
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
-  if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!requireRole(s, ["ADMIN"]) || !(await sessionIsSuper(s))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let body: { state?: string; units?: RawUnit[]; replace?: boolean; structure?: { lga: string; wards?: string[] }[] };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }

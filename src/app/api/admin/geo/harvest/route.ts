@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, requireRole, Session } from "@/lib/auth";
+import { sessionIsSuper } from "@/lib/tenant";
 import { harvestState, warehouseSummary, clearWarehouse } from "@/lib/geo-warehouse";
 import { INEC_STATES } from "@/lib/inec";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const allowed = (s: Session | null): boolean => requireRole(s, ["ADMIN"]);
+// Geography warehouse is platform-wide — super-admins only.
+const allowed = async (s: Session | null): Promise<boolean> => requireRole(s, ["ADMIN"]) && (await sessionIsSuper(s));
 
 // GET → warehouse counts + the list of harvestable states.
 export async function GET(req: NextRequest) {
   const s = await getSession(req);
-  if (!allowed(s)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await allowed(s))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   return NextResponse.json({ states: INEC_STATES, summary: await warehouseSummary() });
 }
 
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
 // stay within request limits; the client loops states for a full-country import.
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
-  if (!allowed(s)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await allowed(s))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { state } = await req.json().catch(() => ({}));
   const target = String(state || "").toUpperCase().trim();
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
 // submission unit links first). For a clean national re-import.
 export async function DELETE(req: NextRequest) {
   const s = await getSession(req);
-  if (!allowed(s)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await allowed(s))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { confirm } = await req.json().catch(() => ({}));
   if (confirm !== "CLEAR") return NextResponse.json({ error: "Pass { confirm: 'CLEAR' } to wipe the warehouse." }, { status: 400 });
   try {

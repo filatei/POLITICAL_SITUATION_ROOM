@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
+import { sessionIsSuper } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -126,7 +127,7 @@ export async function GET(req: NextRequest) {
 // be harvested). Upserts the hierarchy; whatever level's name is provided is created.
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
-  if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!requireRole(s, ["ADMIN"]) || !(await sessionIsSuper(s))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const stateName = String(b.state || "").toUpperCase().trim();
   const lgaName = String(b.lga || "").trim();

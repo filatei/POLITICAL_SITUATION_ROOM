@@ -22,6 +22,9 @@ export async function generateMetadata(): Promise<Metadata> {
       ],
       apple: [{ url: "/icon-180.png", sizes: "180x180" }],
     },
+    // Dark share card so WhatsApp/social previews don't show a white background.
+    openGraph: { title: b.name, description: b.tagline, type: "website", images: [{ url: "/og.png", width: 1200, height: 630, alt: b.name }] },
+    twitter: { card: "summary_large_image", title: b.name, description: b.tagline, images: ["/og.png"] },
   };
 }
 

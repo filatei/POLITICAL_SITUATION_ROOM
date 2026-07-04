@@ -15,6 +15,7 @@ type Agent = { id: string; name: string; phone?: string; email?: string | null; 
 export default function AdminPage() {
   const [state, setState] = useState<"loading" | "in" | "out" | "denied">("loading");
   const [session, setSession] = useState<Session | null>(null);
+  const [isSuper, setIsSuper] = useState(false);
 
   async function check() {
     const r = await api("/api/auth/me");
@@ -22,6 +23,7 @@ export default function AdminPage() {
     const j = await r.json();
     const role = j.session?.role;
     setSession(j.session);
+    setIsSuper(!!j.isSuper);
     setState(role === "ADMIN" || role === "COORDINATOR" ? "in" : "denied");
   }
   useEffect(() => { check(); }, []);
@@ -41,12 +43,12 @@ export default function AdminPage() {
         </div>
       </main>
     );
-  return <Console session={session!} />;
+  return <Console session={session!} isSuper={isSuper} />;
 }
 
 type AdminTab = "codes" | "geo" | "results" | "ai" | "billing" | "settings";
 
-function Console({ session }: { session: Session }) {
+function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   const [units, setUnits] = useState<Unit[]>([]);
   const [lgas, setLgas] = useState<Lga[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -147,7 +149,9 @@ function Console({ session }: { session: Session }) {
   }, []);
   const TABS: { key: AdminTab; label: string }[] = [
     { key: "codes", label: "Agents & Codes" },
-    { key: "geo", label: "Geography" },
+    // Geography = the shared, platform-wide INEC warehouse (uploads/harvest).
+    // Only super-admins manage it; tenant admins never see it.
+    ...(isSuper ? [{ key: "geo" as const, label: "Geography" }] : []),
     { key: "results", label: "Results" },
     { key: "ai", label: "AI & Knowledge" },
     ...(isAdmin ? [{ key: "billing" as const, label: "Billing" }, { key: "settings" as const, label: "Settings" }] : []),
@@ -159,19 +163,25 @@ function Console({ session }: { session: Session }) {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface/80 px-5 py-3.5 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <img src="/psr-logo.png" alt="PSR" className="h-7 w-auto max-w-[110px] shrink-0 object-contain" />
-          <div className="min-w-0 border-l border-line pl-3">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line bg-surface/80 px-3 py-3 backdrop-blur-md sm:px-5 sm:py-3.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <img src="/psr-logo.png" alt="PSR" className="h-7 w-auto max-w-[100px] shrink-0 object-contain" />
+          {/* Verbose title only on ≥sm; on mobile the top bar stays clean (logo + actions). */}
+          <div className="hidden min-w-0 border-l border-line pl-3 sm:block">
             <div className="truncate text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin · {tabTitle[tab]}</div>
             <div className="truncate text-lg font-bold tracking-tight" title={electionName}>{electionName || "Situation Room"}</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
-          <a href="/room" className="btn-ghost">Dashboard</a>
+          <a href="/room" className="btn-ghost px-3 py-1.5 text-sm">Dashboard</a>
         </div>
       </header>
+      {/* Compact election name on mobile, below the top bar. */}
+      <div className="border-b border-line px-4 py-2 sm:hidden">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Admin · {tabTitle[tab]}</div>
+        <div className="truncate text-base font-bold tracking-tight">{electionName || "Situation Room"}</div>
+      </div>
 
       <nav className="sticky top-[57px] z-[9] flex gap-1 overflow-x-auto border-b border-line bg-surface/85 px-3 py-2 backdrop-blur-md">
         {TABS.map((t) => (
@@ -319,7 +329,7 @@ function Console({ session }: { session: Session }) {
       </main>
       )}
 
-      {tab === "geo" && (
+      {tab === "geo" && isSuper && (
         <div className="space-y-4 p-5">
           <GeoConsole onFlash={setFlash} onOpenAgent={(id) => setOpenAgent(id)} />
           {isAdmin && <WarehouseCard onFlash={setFlash} />}

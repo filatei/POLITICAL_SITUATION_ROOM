@@ -12,6 +12,15 @@ export function isSuperAdmin(email?: string | null): boolean {
   return !!email && SUPER_ADMINS.includes(email.toLowerCase());
 }
 
+// Resolve whether a session belongs to a platform super-admin. The JWT carries
+// the user id (sub) but not the email, so we look the email up. Super-admins own
+// the shared geography warehouse; tenant admins do not.
+export async function sessionIsSuper(s: { sub?: string; kind?: string } | null): Promise<boolean> {
+  if (!s || s.kind !== "user" || !s.sub) return false;
+  const u = await db.user.findUnique({ where: { id: s.sub }, select: { email: true } });
+  return isSuperAdmin(u?.email);
+}
+
 export function slugify(input: string): string {
   return (input || "")
     .toLowerCase()

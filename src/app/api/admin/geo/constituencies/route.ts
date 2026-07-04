@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession, requireRole } from "@/lib/auth";
+import { sessionIsSuper } from "@/lib/tenant";
 import { importConstituencies, listConstituencies, constituencySummary, ConstituencyRow, CType } from "@/lib/constituencies";
 
 export const runtime = "nodejs";
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
-  if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!requireRole(s, ["ADMIN"]) || !(await sessionIsSuper(s))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let body: { state?: string; type?: string; rows?: ConstituencyRow[]; replace?: boolean };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
