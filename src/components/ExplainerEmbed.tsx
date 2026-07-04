@@ -21,7 +21,7 @@ export default function ExplainerEmbed({ url, isVideo, isEmbed }: { url: string;
   return (
     <div ref={wrapRef} className="relative bg-black">
       {isVideo ? (
-        <video ref={mediaRef as any} className="aspect-video w-full" src={url} controls playsInline poster="/og.png" />
+        <video ref={mediaRef as any} className="aspect-video w-full" src={url} controls playsInline poster="/psr-explainer-poster.png" />
       ) : isEmbed ? (
         <iframe ref={mediaRef as any} className="aspect-video w-full" src={url} title="Explainer" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowFullScreen />
       ) : (
