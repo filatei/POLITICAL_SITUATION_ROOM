@@ -38,25 +38,47 @@ def grid_from_sheet(ws):
                 if not g.get((r, c)): g[(r, c)] = val
     return g
 
+def mode_of(text):
+    """Infer section type from a sheet name, section title or header label.
+    Header *labels* are unreliable (some states mislabel senatorial/federal
+    sheets as 'STATE CONSTITUENCY'), so callers prefer sheet name / title."""
+    U = (text or "").upper()
+    if "SENATORIAL" in U or re.search(r'\bSD\b', U): return "SENATORIAL"
+    if "FEDERAL" in U or re.search(r'\bFC\b', U): return "FEDERAL"
+    if "STATE CONSTITUEN" in U or re.search(r'\bSC\b', U): return "STATE"
+    return None
+
 def parse_sheet(ws):
     g = grid_from_sheet(ws)
     maxr, maxc = ws.max_row, ws.max_column
-    mode = None; name_c = None; comp_c = None
+    sheet_mode = mode_of(ws.title)
     entries = {"SENATORIAL": [], "FEDERAL": [], "STATE": []}
-    cur = None
+    mode = None; name_c = None; comp_c = None; cur = None; pending = None
     for r in range(1, maxr + 1):
-        rowvals = [g.get((r, c), "") for c in range(1, maxc + 1)]
-        upper = " | ".join(rowvals).upper()
-        # detect a header row and its columns
-        hn = hc = None; hmode = None
-        for c in range(1, maxc + 1):
-            U = g.get((r, c), "").upper()
-            if "NAME OF SENATORIAL DISTRICT" in U: hmode, hn = "SENATORIAL", c
-            elif "NAME OF FEDERAL CONSTITUENCY" in U: hmode, hn = "FEDERAL", c
-            elif "NAME OF STATE CONSTITUENCY" in U: hmode, hn = "STATE", c
-            if "LGA COMPOSITION" in U or "RA COMPOSITION" in U: hc = c
+        cells = [(c, g.get((r, c), "")) for c in range(1, maxc + 1)]
+        # a section-title row (e.g. "KOGI STATE SENATORIAL DISTRICTS") — ignore
+        # column-header cells like "NAME OF …" / "…COMPOSITION" which can be
+        # mislabelled in the source and must not drive type detection
+        for _, v in cells:
+            U = v.upper()
+            if "NAME OF" in U or "COMPOSITION" in U or U.strip() == "S/N":
+                continue
+            m = mode_of(v)
+            if m and ("CONSTITUEN" in U or "DISTRICT" in U or "SENATORIAL" in U):
+                pending = m
+        # a header row = has a "NAME OF <x>" cell (not the collation column) and
+        # a "...COMPOSITION" cell
+        hn = hc = None
+        for c, v in cells:
+            U = v.upper()
+            if "NAME OF" in U and "COLLATION" not in U and hn is None: hn = c
+            if "COMPOSITION" in U: hc = c
         if hn and hc:
-            mode, name_c, comp_c, cur = hmode, hn, hc, None
+            name_c, comp_c = hn, hc
+            # sheet name (SD/FC/SC) is the most reliable signal; then a section
+            # title seen above; header labels last (some states mislabel them)
+            mode = sheet_mode or pending or mode_of(g.get((r, hn), ""))
+            pending = None; cur = None
             continue
         if not mode or not name_c or not comp_c:
             continue
@@ -65,8 +87,6 @@ def parse_sheet(ws):
             continue
         if nm and nm.upper() != "S/N":
             name, code = split_name(nm)
-            # merged name repeats on continuation rows -> only open a new entry
-            # when the name actually changes
             if not cur or cur["_raw"] != nm:
                 cur = {"name": name, "code": code, "lgas": [], "_raw": nm}
                 entries[mode].append(cur)
