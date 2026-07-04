@@ -4,13 +4,15 @@ import SWRegister from "@/components/SWRegister";
 import InstallPrompt from "@/components/InstallPrompt";
 import { BrandProvider } from "@/components/BrandProvider";
 import { getBrand } from "@/lib/brand";
+import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const b = await getBrand();
   return {
-    title: b.name,
+    metadataBase: new URL(SITE_URL),
+    title: { default: `${b.name} — Live Election Situation Room`, template: `%s · ${b.name}` },
     description: b.tagline,
     manifest: "/manifest.webmanifest",
     applicationName: b.name,

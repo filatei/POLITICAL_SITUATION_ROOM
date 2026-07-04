@@ -1,10 +1,31 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import ContactForm from "@/components/ContactForm";
 import GeoShowcase from "@/components/GeoShowcase";
 import Onboard from "@/components/Onboard";
 import { getBrand } from "@/lib/brand";
+import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const b = await getBrand();
+  const title = `${b.name} — Live Election Situation Room for Nigeria`;
+  const description =
+    "Run your own real-time election situation room. Field agents report verified polling-unit results, incidents and photos from across Nigeria — Presidential, Governorship, Senatorial, House of Reps, State Assembly and LG. Independent parallel monitoring, audit-logged and grounded in the Electoral Act.";
+  return {
+    title: { absolute: title },
+    description,
+    alternates: { canonical: "/" },
+    keywords: [
+      "election situation room", "Nigeria election monitoring", "parallel vote tabulation",
+      "polling unit results", "INEC results tracking", "election observer platform",
+      "party agent app", "collation monitoring", "election incident reporting",
+    ],
+    openGraph: { title, description, url: SITE_URL, type: "website" },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 // Defaults to the built-in animated explainer at /explainer.html. Override with
 // NEXT_PUBLIC_EXPLAINER_URL (a YouTube/Vimeo embed, an .mp4, or another page).
 import ExplainerEmbed from "@/components/ExplainerEmbed";
@@ -33,8 +54,21 @@ const FEATURES = [
 
 export default async function Home() {
   const brand = await getBrand();
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: brand.name,
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web, Android, iOS (PWA)",
+    description:
+      "Independent, real-time election situation room for Nigeria: verified polling-unit results, incident reporting and field monitoring for parties, campaigns and observer groups.",
+    url: SITE_URL,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "NGN", description: "First 10 agent seats free per election" },
+    areaServed: { "@type": "Country", name: "Nigeria" },
+  };
   return (
     <main className="min-h-dvh">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       {/* Nav */}
       <header className="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center px-5 py-3.5">
