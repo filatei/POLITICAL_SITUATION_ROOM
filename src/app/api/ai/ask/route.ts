@@ -16,14 +16,14 @@ export async function POST(req: NextRequest) {
   const { question, history } = await req.json();
   if (!question) return NextResponse.json({ error: "Question required." }, { status: 400 });
 
-  // Live field data context (recent submissions + a headline tally).
-  const [rows, election] = await Promise.all([
-    db.submission.findMany({
-      orderBy: { receivedAt: "desc" }, take: 80,
-      include: { agent: true, pollingUnit: { include: { ward: true, lga: true } }, scores: { include: { candidate: { include: { party: true } } } } },
-    }),
-    scopedElection(),
-  ]);
+  // Live field data context (recent submissions + a headline tally) — scoped to
+  // the caller's own election so the assistant never sees another tenant's data.
+  const election = await scopedElection();
+  const rows = await db.submission.findMany({
+    where: election ? { electionId: election.id } : {},
+    orderBy: { receivedAt: "desc" }, take: 80,
+    include: { agent: true, pollingUnit: { include: { ward: true, lga: true } }, scores: { include: { candidate: { include: { party: true } } } } },
+  });
   const dataCtx = [
     election ? `ELECTION: ${election.name} (${election.type})` : "",
     ...rows.map((r) => {

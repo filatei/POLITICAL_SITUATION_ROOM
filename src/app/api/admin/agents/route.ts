@@ -10,7 +10,9 @@ export const runtime = "nodejs";
 export async function GET(req: NextRequest) {
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN", "COORDINATOR"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const election = await scopedElection();
   const agents = await db.agent.findMany({
+    where: election ? { electionId: election.id } : {},
     orderBy: { createdAt: "desc" }, take: 500,
     include: { pollingUnit: { include: { ward: true, lga: true } } },
   });

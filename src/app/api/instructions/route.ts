@@ -73,8 +73,10 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // Staff: recent instructions with delivery rollup.
+  // Staff: recent instructions with delivery rollup — scoped to their election.
+  const election = await scopedElection();
   const rows = await db.instruction.findMany({
+    where: election ? { electionId: election.id } : {},
     orderBy: { createdAt: "desc" }, take: 40, include: { receipts: true, fromUser: true },
   });
   return NextResponse.json({

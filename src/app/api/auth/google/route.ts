@@ -3,7 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { db } from "@/lib/db";
 import { withToken } from "@/lib/respond";
 import type { Session } from "@/lib/auth";
-import { scopedTenant, canAdminTenant } from "@/lib/tenant";
+import { scopedTenant, canAdminTenant, isSuperAdmin } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const user = await db.user.findUnique({ where: { email: key } });
   if (user) {
     if (!user.googleSub && sub) await db.user.update({ where: { id: user.id }, data: { googleSub: sub } });
-    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL" };
+    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId };
     return withToken(session);
   }
 
@@ -57,12 +57,15 @@ export async function POST(req: NextRequest) {
   // ADMIN record. Super-admins also pass canAdminTenant for any tenant.
   const tenant = await scopedTenant();
   if (tenant && canAdminTenant(key, tenant)) {
+    // Super-admins stay global (electionId null); a plain tenant admin is pinned
+    // to this tenant's election so they can never act on another tenant.
+    const pinned = isSuperAdmin(key) ? null : tenant.electionId;
     const user = await db.user.upsert({
       where: { email: key },
-      update: { googleSub: sub ?? undefined, ...(name ? { name } : {}) },
-      create: { email: key, name: name || key, role: "ADMIN", googleSub: sub ?? null },
+      update: { googleSub: sub ?? undefined, ...(name ? { name } : {}), ...(pinned ? { electionId: pinned } : {}) },
+      create: { email: key, name: name || key, role: "ADMIN", googleSub: sub ?? null, electionId: pinned },
     });
-    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL" };
+    const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId };
     return withToken(session);
   }
 

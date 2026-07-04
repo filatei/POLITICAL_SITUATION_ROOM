@@ -12,8 +12,16 @@ export type Session = {
   electionId?: string | null;
 };
 
-const secret = () =>
-  new TextEncoder().encode(process.env.JWT_SECRET || "dev-insecure-secret");
+const secret = () => {
+  const val = process.env.JWT_SECRET;
+  // Never run production auth on the dev fallback — that would let anyone forge
+  // tokens (including super-admin). Fail loudly instead.
+  if (!val || val.length < 16) {
+    if (process.env.NODE_ENV === "production") throw new Error("JWT_SECRET is missing or too short — refusing to sign/verify tokens.");
+    return new TextEncoder().encode(val || "dev-insecure-secret-please-set-JWT_SECRET");
+  }
+  return new TextEncoder().encode(val);
+};
 
 export async function signSession(s: Session, expires = "30d"): Promise<string> {
   return new SignJWT({ ...s })

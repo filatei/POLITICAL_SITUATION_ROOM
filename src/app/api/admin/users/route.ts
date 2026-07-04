@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
+import { scopedElection } from "@/lib/election-scope";
+import { sessionIsSuper } from "@/lib/tenant";
 
 export const runtime = "nodejs";
 
@@ -19,7 +21,12 @@ const schema = z.object({
 export async function GET(req: NextRequest) {
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const users = await db.user.findMany({ orderBy: { createdAt: "desc" } });
+  const isSuper = await sessionIsSuper(s);
+  const election = await scopedElection();
+  const users = await db.user.findMany({
+    where: isSuper ? {} : { electionId: election?.id ?? "__none__" },
+    orderBy: { createdAt: "desc" },
+  });
   return NextResponse.json({
     users: users.map((u) => ({
       id: u.id, email: u.email, name: u.name, role: u.role,
@@ -37,11 +44,15 @@ export async function POST(req: NextRequest) {
   const { email, name, role, password } = parsed.data;
   const key = email.toLowerCase();
 
+  const isSuper = await sessionIsSuper(s);
+  const election = await scopedElection();
   const existing = await db.user.findUnique({ where: { email: key } });
   const passwordHash = password ? await bcrypt.hash(password, 10) : undefined;
 
   if (existing) {
-    // Update name/role, and password only if a new one was supplied.
+    // Can't edit staff belonging to a different tenant (super-admins can).
+    if (!isSuper && existing.electionId && existing.electionId !== election?.id)
+      return NextResponse.json({ error: "This user belongs to another room." }, { status: 403 });
     const updated = await db.user.update({
       where: { id: existing.id },
       data: { name, role, ...(passwordHash ? { passwordHash } : {}) },
@@ -50,6 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (!passwordHash) return NextResponse.json({ error: "Password is required for a new user." }, { status: 400 });
-  const created = await db.user.create({ data: { email: key, name, role, passwordHash } });
+  // New staff are pinned to the room they were enrolled in.
+  const created = await db.user.create({ data: { email: key, name, role, passwordHash, electionId: election?.id ?? null } });
   return NextResponse.json({ ok: true, edited: false, user: { id: created.id, email: created.email, name: created.name, role: created.role } });
 }

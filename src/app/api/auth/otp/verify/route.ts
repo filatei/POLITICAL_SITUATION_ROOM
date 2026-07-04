@@ -29,6 +29,6 @@ export async function POST(req: NextRequest) {
   }
   const user = await db.user.findFirst({ where: { email: p } });
   if (!user) return NextResponse.json({ error: "No account." }, { status: 404 });
-  const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL" };
+  const session: Session = { sub: user.id, kind: "user", name: user.name, role: user.role, scope: "NATIONAL", electionId: user.electionId };
   return withToken(session);
 }

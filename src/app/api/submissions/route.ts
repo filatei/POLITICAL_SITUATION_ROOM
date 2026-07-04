@@ -110,8 +110,12 @@ export async function GET(req: NextRequest) {
   const type = url.searchParams.get("type") as any;
   const limit = Math.min(Number(url.searchParams.get("limit") || 60), 200);
 
+  // Scope to the caller's election so one tenant never sees another's field data.
+  const election = await scopedElection();
+
   const rows = await db.submission.findMany({
     where: {
+      ...(election ? { electionId: election.id } : {}),
       ...(type ? { type } : {}),
       ...(s.kind === "agent" ? { agentId: s.sub } : {}),
     },

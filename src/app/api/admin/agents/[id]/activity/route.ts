@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
+import { scopedElection } from "@/lib/election-scope";
 
 export const runtime = "nodejs";
 
@@ -10,11 +11,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN", "COORDINATOR"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const election = await scopedElection();
   const agent = await db.agent.findUnique({
     where: { id: params.id },
     include: { pollingUnit: { include: { ward: true, lga: true, state: true } } },
   });
-  if (!agent) return NextResponse.json({ error: "Unknown code." }, { status: 404 });
+  if (!agent || (election && agent.electionId !== election.id)) return NextResponse.json({ error: "Unknown code." }, { status: 404 });
 
   const subs = await db.submission.findMany({
     where: { agentId: agent.id },

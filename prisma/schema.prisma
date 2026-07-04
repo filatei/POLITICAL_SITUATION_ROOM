@@ -300,6 +300,9 @@ model User {
   role         Role     @default(ANALYST)
   passwordHash String?
   googleSub    String?  @unique
+  // Tenant binding: the election this staff member may administer. NULL = a
+  // platform super-admin / global staff (not pinned to a single tenant).
+  electionId   String?
   createdAt    DateTime @default(now())
   submissions  Submission[]
   instructions Instruction[]
