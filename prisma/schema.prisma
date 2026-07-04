@@ -442,7 +442,9 @@ model ContactMessage {
 
 // White-label branding (single row per deployment/tenant).
 model Branding {
-  id         String   @id @default("default")
+  id         String   @id @default(cuid())
+  // Per-tenant branding: one row per election. NULL = the platform default row.
+  electionId String?  @unique
   name       String   @default("Situation Room")
   tagline    String   @default("Real-time election monitoring")
   accent     String   @default("#5b8cff")

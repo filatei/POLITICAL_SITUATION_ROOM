@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 
 export type Brand = { name: string; tagline: string; accent: string; accentRgb: string; logoUrl: string | null };
@@ -12,9 +13,17 @@ export function hexToRgbTriplet(hex: string): string {
   return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`;
 }
 
+// Resolve branding for the tenant currently being viewed (via the psr_tenant
+// cookie). No tenant (e.g. the public landing) → the PSR platform default, so a
+// tenant's brand never bleeds onto the marketing site or another room.
 export async function getBrand(): Promise<Brand> {
   try {
-    const b = await db.branding.findFirst();
+    let b: { name: string; tagline: string; accent: string; logoUrl: string | null } | null = null;
+    const slug = cookies().get("psr_tenant")?.value;
+    if (slug) {
+      const t = await db.tenant.findUnique({ where: { slug: slug.toLowerCase() }, select: { electionId: true } });
+      if (t) b = await db.branding.findUnique({ where: { electionId: t.electionId } });
+    }
     const base = b ? { name: b.name, tagline: b.tagline, accent: b.accent, logoUrl: b.logoUrl } : DEFAULTS;
     return { ...base, accentRgb: hexToRgbTriplet(base.accent) };
   } catch {
