@@ -30,7 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // NEXT_PUBLIC_EXPLAINER_URL (a YouTube/Vimeo embed, an .mp4, or another page).
 import ExplainerEmbed from "@/components/ExplainerEmbed";
 
-const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "https://www.youtube.com/embed/KDE8LVMg1wg";
+// Pinned to the YouTube version (Shorts KDE8LVMg1wg → /embed/ form). Hardcoded
+// so no stale env can point the landing at the old local .mp4.
+const EXPLAINER_URL = "https://www.youtube.com/embed/KDE8LVMg1wg";
 const EXPLAINER_IS_VIDEO = /\.(mp4|webm|ogg)(\?|$)/i.test(EXPLAINER_URL);
 const EXPLAINER_IS_EMBED = EXPLAINER_URL.includes("youtube") || EXPLAINER_URL.includes("vimeo") || EXPLAINER_URL.endsWith(".html") || EXPLAINER_URL.startsWith("/");
 
