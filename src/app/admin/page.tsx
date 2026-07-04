@@ -143,10 +143,15 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   }
 
   const isAdmin = session.role === "ADMIN";
+  // The bare /admin is the platform super-console (no tenant scoped); a tenant
+  // admin lives at /{slug}/admin. Only show a specific election name for the latter.
+  const superConsole = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/admin";
   const [electionName, setElectionName] = useState("");
   useEffect(() => {
+    if (superConsole) return;
     api("/api/bootstrap").then((r) => (r.ok ? r.json() : null)).then((j) => j?.election?.name && setElectionName(j.election.name)).catch(() => {});
-  }, []);
+  }, [superConsole]);
+  const headerTitle = superConsole ? "Super admin console" : (electionName || "Situation Room");
   const TABS: { key: AdminTab; label: string }[] = [
     { key: "codes", label: "Agents & Codes" },
     // Geography + Tenants = platform-wide, super-admins only.
@@ -168,7 +173,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
           {/* Verbose title only on ≥sm; on mobile the top bar stays clean (logo + actions). */}
           <div className="hidden min-w-0 border-l border-line pl-3 sm:block">
             <div className="truncate text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin · {tabTitle[tab]}</div>
-            <div className="truncate text-lg font-bold tracking-tight" title={electionName}>{electionName || "Situation Room"}</div>
+            <div className="truncate text-lg font-bold tracking-tight" title={headerTitle}>{headerTitle}</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -179,7 +184,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
       {/* Compact election name on mobile, below the top bar. */}
       <div className="border-b border-line px-4 py-2 sm:hidden">
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Admin · {tabTitle[tab]}</div>
-        <div className="truncate text-base font-bold tracking-tight">{electionName || "Situation Room"}</div>
+        <div className="truncate text-base font-bold tracking-tight">{headerTitle}</div>
       </div>
 
       <nav className="sticky top-[57px] z-[9] flex gap-1 overflow-x-auto border-b border-line bg-surface/85 px-3 py-2 backdrop-blur-md">
@@ -1302,9 +1307,31 @@ function TenantsPanel() {
   const [rows, setRows] = useState<TenantRow[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
+  const [busy, setBusy] = useState("");
+  function load() {
     api("/api/admin/tenants").then((r) => (r.ok ? r.json() : { tenants: [] })).then((j) => { setRows(j.tenants || []); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function resetTenant(t: TenantRow) {
+    if (!window.confirm(`Reset "${t.electionName}"?\n\nThis permanently deletes ALL messages, incidents, updates and scores for this room. Agents, the ballot and geography are kept.`)) return;
+    setBusy(t.slug);
+    try {
+      const r = await api(`/api/admin/tenants/${t.slug}`, { method: "POST", body: JSON.stringify({ action: "reset" }) });
+      const j = await r.json();
+      window.alert(r.ok ? `Reset done — removed ${j.removed?.submissions || 0} submissions and ${j.removed?.instructions || 0} instructions.` : (j.error || "Reset failed."));
+    } finally { setBusy(""); load(); }
+  }
+  async function deleteTenant(t: TenantRow) {
+    const typed = window.prompt(`This PERMANENTLY deletes "${t.electionName}" and ALL its data (agents, scores, everything).\n\nType the slug to confirm:\n${t.slug}`);
+    if (typed !== t.slug) { if (typed !== null) window.alert("Slug did not match — nothing deleted."); return; }
+    setBusy(t.slug);
+    try {
+      const r = await api(`/api/admin/tenants/${t.slug}?confirm=${encodeURIComponent(t.slug)}`, { method: "DELETE" });
+      const j = await r.json();
+      window.alert(r.ok ? `Deleted ${t.slug}.` : (j.error || "Delete failed."));
+    } finally { setBusy(""); load(); }
+  }
   const filtered = q.trim() ? rows.filter((t) => (t.name + " " + t.slug + " " + (t.contactEmail || "")).toLowerCase().includes(q.trim().toLowerCase())) : rows;
   return (
     <main className="p-5">
@@ -1335,6 +1362,8 @@ function TenantsPanel() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <a href={`/${t.slug}/room`} className="btn-primary px-3 py-1.5 text-xs">Open room →</a>
                 <a href={`/${t.slug}/admin`} className="btn-ghost px-3 py-1.5 text-xs">Admin</a>
+                <button onClick={() => resetTenant(t)} disabled={busy === t.slug} className="ml-auto rounded-lg border border-warn/40 px-3 py-1.5 text-xs font-semibold text-warn hover:bg-warn/10">Reset</button>
+                <button onClick={() => deleteTenant(t)} disabled={busy === t.slug} className="rounded-lg border border-bad/40 px-3 py-1.5 text-xs font-semibold text-bad hover:bg-bad/10">Delete</button>
               </div>
             </div>
           ))}

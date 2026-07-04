@@ -96,6 +96,23 @@ export default function Onboard() {
   const [done, setDone] = useState<null | { slug: string; name: string; roomPath: string; adminPath: string }>(null);
 
   const effSlug = touched ? slug : slugify(name);
+  const [slugInfo, setSlugInfo] = useState<{ available: boolean; suggestions: string[]; tooShort?: boolean } | null>(null);
+  const [slugChecking, setSlugChecking] = useState(false);
+
+  // Debounced availability check for the room address (two rooms can cover the
+  // same election but must have unique URLs).
+  useEffect(() => {
+    setSlugInfo(null);
+    if (effSlug.length < 3) return;
+    setSlugChecking(true);
+    const h = setTimeout(async () => {
+      try {
+        const j = await fetch(`/api/public/slug-check?slug=${encodeURIComponent(effSlug)}`).then((r) => r.json());
+        setSlugInfo({ available: !!j.available, suggestions: j.suggestions || [], tooShort: j.tooShort });
+      } catch { /* ignore */ } finally { setSlugChecking(false); }
+    }, 300);
+    return () => clearTimeout(h);
+  }, [effSlug]);
 
   // Load the scope plan + state list whenever the election type changes.
   useEffect(() => {
@@ -179,6 +196,20 @@ export default function Onboard() {
               <span className="text-sm text-muted">/</span>
               <input className="input tabular" value={effSlug} onChange={(e) => { setTouched(true); setSlug(slugify(e.target.value)); }} placeholder="ondosouthsenate2027" />
             </div>
+            {effSlug.length >= 3 && (
+              <div className="mt-1 text-[11px]">
+                {slugChecking ? <span className="text-muted">Checking availability…</span>
+                  : slugInfo?.available ? <span className="text-good">✓ /{effSlug} is available</span>
+                  : slugInfo && !slugInfo.available ? (
+                    <span className="text-bad">
+                      /{effSlug} is taken.
+                      {slugInfo.suggestions.length > 0 && <> Try: {slugInfo.suggestions.map((s) => (
+                        <button key={s} type="button" onClick={() => { setTouched(true); setSlug(s); }} className="ml-1 rounded bg-accent/15 px-1.5 py-0.5 font-semibold text-accent hover:bg-accent/25">/{s}</button>
+                      ))}</>}
+                    </span>
+                  ) : null}
+              </div>
+            )}
           </div>
         </div>
         {/* Scope — depends on election type */}
@@ -212,7 +243,7 @@ export default function Onboard() {
           <div><label className="label">Contact email (admin)</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="you@org.ng" /></div>
           <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
         </div>
-        <button className="btn-primary w-full" disabled={busy || name.trim().length < 3 || !email.trim() || !scopeReady} onClick={submit}>
+        <button className="btn-primary w-full" disabled={busy || name.trim().length < 3 || !email.trim() || !scopeReady || slugInfo?.available === false} onClick={submit}>
           {busy ? "Creating…" : "Create my situation room (10 seats free)"}
         </button>
         <p className="text-center text-[11px] text-muted">Free to start with 10 agent seats. Add more seats (₦10,000 each) any time from your admin.</p>
