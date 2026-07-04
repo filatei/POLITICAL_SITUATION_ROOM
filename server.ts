@@ -126,5 +126,22 @@ app.prepare().then(() => {
     setTimeout(sweep, 30 * 1000);       // once shortly after boot
   }
 
+  // App-side monthly refresh of the INEC party registry (details + change
+  // history). Self-tracked via PartyRegistry.checkedAt — runs when the newest
+  // record is older than ~27 days; if INEC blocks the server fetch it simply
+  // retries next tick (checkedAt only advances on success).
+  const refreshParties = async () => {
+    try {
+      const latest = await db.partyRegistry.findFirst({ orderBy: { checkedAt: "desc" }, select: { checkedAt: true } });
+      const stale = !latest || Date.now() - new Date(latest.checkedAt).getTime() > 27 * 24 * 60 * 60 * 1000;
+      if (!stale) return;
+      const { refreshPartyRegistry } = await import("./src/lib/party-registry");
+      const r = await refreshPartyRegistry();
+      console.log(`> party registry refreshed: ${r.parties} parties, ${r.created} new, ${r.updated} updated, ${r.changes} changes${r.errors.length ? `, ${r.errors.length} errors` : ""}`);
+    } catch (e) { console.warn("> party registry refresh failed", (e as Error)?.message); }
+  };
+  setInterval(refreshParties, 12 * 60 * 60 * 1000); // twice daily; acts only when stale
+  setTimeout(refreshParties, 60 * 1000);            // once ~1 min after boot
+
   server.listen(port, () => console.log(`> Situation Room on http://localhost:${port} (Next + Socket.IO)`));
 });

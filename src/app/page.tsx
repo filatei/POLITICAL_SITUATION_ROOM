@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // NEXT_PUBLIC_EXPLAINER_URL (a YouTube/Vimeo embed, an .mp4, or another page).
 import ExplainerEmbed from "@/components/ExplainerEmbed";
 
-const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "/explainer.html";
+const EXPLAINER_URL = process.env.NEXT_PUBLIC_EXPLAINER_URL || "https://www.youtube.com/embed/KDE8LVMg1wg";
 const EXPLAINER_IS_VIDEO = /\.(mp4|webm|ogg)(\?|$)/i.test(EXPLAINER_URL);
 const EXPLAINER_IS_EMBED = EXPLAINER_URL.includes("youtube") || EXPLAINER_URL.includes("vimeo") || EXPLAINER_URL.endsWith(".html") || EXPLAINER_URL.startsWith("/");
 
