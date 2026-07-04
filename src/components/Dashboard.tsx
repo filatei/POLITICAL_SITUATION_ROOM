@@ -180,7 +180,9 @@ export default function Dashboard({ session }: { session: Session }) {
   const pct = (n: number) => Math.round((n / maxVote) * 100);
   const reportPct = tally ? Math.round((tally.reporting.verified / Math.max(1, tally.reporting.total)) * 100) : 0;
   // Parties listed alphabetically; the front-runner is flagged separately.
-  const board = useMemo(() => [...(tally?.leaderboard || [])].sort((a, b) => a.party.localeCompare(b.party)), [tally]);
+  // Leader on top by verified (accepted) votes, then declared; ties fall back to
+  // alphabetical — so before any scores come in the list is alphabetical.
+  const board = useMemo(() => [...(tally?.leaderboard || [])].sort((a, b) => b.verified - a.verified || b.declared - a.declared || a.party.localeCompare(b.party)), [tally]);
   const leadingParty = useMemo(
     () => (tally?.leaderboard || []).reduce<{ party: string; verified: number } | null>((m, l) => (l.verified > (m?.verified ?? -1) ? l : m), null)?.party,
     [tally]
