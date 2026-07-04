@@ -817,7 +817,7 @@ function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; 
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="btn-ghost text-xs" onClick={() => onCopy(a.inviteCode)}>Copy code</button>
               <button className="btn-ghost text-xs" onClick={() => onQr(a.inviteCode, `${a.name} · ${a.unitLabel}`)}>Show QR</button>
-              <button className="btn-ghost text-xs" onClick={() => onCopy(`${a.unitLabel}\nSign in: ${window.location.origin}/agent/login?code=${a.inviteCode}`)}>Copy login link + unit</button>
+              <button className="btn-ghost text-xs" onClick={() => onCopy(`${window.location.origin}/agent/login?code=${a.inviteCode}`)}>Copy login link</button>
               <button className="btn-ghost text-xs" onClick={() => setEdit({ name: a.name, phone: a.phone || "" })}>Assign recipient</button>
             </div>
             {edit && (

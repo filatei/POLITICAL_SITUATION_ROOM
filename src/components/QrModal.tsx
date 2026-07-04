@@ -41,7 +41,7 @@ export default function QrModal({ code, label, onClose, onCopy }: {
         <p className="text-xs text-muted">Agent scans this with their phone camera → the app opens with the code filled in and signs them straight in.</p>
         <div className="grid grid-cols-2 gap-2">
           <button className="btn-ghost" onClick={() => doCopy("code", code)}>{copied === "code" ? "Copied ✓" : "Copy code"}</button>
-          <button className="btn-primary" onClick={() => doCopy("link", `${label ? label + "\n" : ""}Sign in: ${loginUrl}`)}>{copied === "link" ? "Copied ✓" : "Copy link + unit"}</button>
+          <button className="btn-primary" onClick={() => doCopy("link", loginUrl)}>{copied === "link" ? "Copied ✓" : "Copy link"}</button>
         </div>
       </div>
     </div>
