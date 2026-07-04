@@ -306,8 +306,8 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Register an agent</h2>
           <div className="space-y-3">
             <div><label className="label">Agent name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></div>
-            <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
-            <div><label className="label">Google email (optional — lets them sign in with Google)</label><input className="input" value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} inputMode="email" placeholder="agent@gmail.com" /></div>
+            <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" autoComplete="tel" inputMode="tel" placeholder="080…" /></div>
+            <div><label className="label">Google email (optional — lets them sign in with Google)</label><input className="input" value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="agent@gmail.com" /></div>
             <div>
               <label className="label">Polling unit {unitId && <span className="text-good">· selected</span>}</label>
               <input className="input mb-2" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search any unit / ward / LGA in the state…" />
@@ -435,7 +435,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
                 {edit?.id === a.id ? (
                   <div className="mt-2 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-2" onClick={(e) => e.stopPropagation()}>
                     <input className="input py-1 text-sm" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Recipient name" />
-                    <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputMode="tel" placeholder="Recipient phone (optional)" />
+                    <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} type="tel" autoComplete="tel" inputMode="tel" placeholder="Recipient phone (optional)" />
                     <div className="flex gap-2">
                       <button className="btn-primary flex-1 py-1.5 text-sm" onClick={saveRecipient}>Save recipient</button>
                       <button className="btn-ghost py-1.5 text-sm" onClick={() => setEdit(null)}>Cancel</button>
@@ -582,16 +582,16 @@ function TallyOverride({ units, onFlash }: { units: Unit[]; onFlash: (s: string)
               <div key={c.id} className="flex items-center gap-2">
                 <span className="w-14 shrink-0 text-sm font-bold" style={{ color: c.color }}>{c.party}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-muted">{c.name}</span>
-                <input className="input tabular w-24 py-1 text-right" inputMode="numeric" value={votes[c.id] ?? ""}
+                <input className="input tabular w-24 py-1 text-right" inputMode="numeric" pattern="[0-9]*" value={votes[c.id] ?? ""}
                   onChange={(e) => setVotes((v) => ({ ...v, [c.id]: e.target.value.replace(/[^0-9]/g, "") }))} placeholder="0" disabled={!unitId} />
               </div>
             ))}
             {!cands.length && <p className="text-sm text-muted">No candidates.</p>}
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
-            <div><label className="label">Accredited</label><input className="input tabular py-1" inputMode="numeric" value={acc} onChange={(e) => setAcc(e.target.value.replace(/[^0-9]/g, ""))} disabled={!unitId} /></div>
-            <div><label className="label">Cast</label><input className="input tabular py-1" inputMode="numeric" value={cast} onChange={(e) => setCast(e.target.value.replace(/[^0-9]/g, ""))} disabled={!unitId} /></div>
-            <div><label className="label">Rejected</label><input className="input tabular py-1" inputMode="numeric" value={rej} onChange={(e) => setRej(e.target.value.replace(/[^0-9]/g, ""))} disabled={!unitId} /></div>
+            <div><label className="label">Accredited</label><input className="input tabular py-1" inputMode="numeric" pattern="[0-9]*" value={acc} onChange={(e) => setAcc(e.target.value.replace(/[^0-9]/g, ""))} disabled={!unitId} /></div>
+            <div><label className="label">Cast</label><input className="input tabular py-1" inputMode="numeric" pattern="[0-9]*" value={cast} onChange={(e) => setCast(e.target.value.replace(/[^0-9]/g, ""))} disabled={!unitId} /></div>
+            <div><label className="label">Rejected</label><input className="input tabular py-1" inputMode="numeric" pattern="[0-9]*" value={rej} onChange={(e) => setRej(e.target.value.replace(/[^0-9]/g, ""))} disabled={!unitId} /></div>
           </div>
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-muted">Total entered: <b className="tabular text-ink">{total.toLocaleString()}</b></span>
@@ -663,7 +663,7 @@ function StaffUsers({ onFlash }: { onFlash: (s: string) => void }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3">
           <div><label className="label">Full name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" /></div>
-          <div><label className="label">Email {editingId && <span className="text-muted">· sign-in unchanged</span>}</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="jane@org.ng" disabled={!!editingId} /></div>
+          <div><label className="label">Email {editingId && <span className="text-muted">· sign-in unchanged</span>}</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="jane@org.ng" disabled={!!editingId} /></div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="label">Role</label>
@@ -950,7 +950,7 @@ function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; 
             {edit && (
               <div className="mt-2 space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-2">
                 <input className="input py-1 text-sm" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Recipient name" />
-                <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputMode="tel" placeholder="Recipient phone" />
+                <input className="input py-1 text-sm" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} type="tel" autoComplete="tel" inputMode="tel" placeholder="Recipient phone" />
                 <div className="flex gap-2"><button className="btn-primary flex-1 py-1.5 text-sm" onClick={saveRecipient}>Save</button><button className="btn-ghost py-1.5 text-sm" onClick={() => setEdit(null)}>Cancel</button></div>
               </div>
             )}
@@ -1327,8 +1327,8 @@ function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
         <div>
           <label className="label">Plan calculator</label>
           <div className="grid grid-cols-2 gap-2">
-            <div><span className="text-[11px] text-muted">Units to cover</span><input className="input tabular" inputMode="numeric" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 200" /></div>
-            <div><span className="text-[11px] text-muted">Agents / unit</span><input className="input tabular" inputMode="numeric" value={perUnit} onChange={(e) => setPerUnit(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1" /></div>
+            <div><span className="text-[11px] text-muted">Units to cover</span><input className="input tabular" inputMode="numeric" pattern="[0-9]*" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^0-9]/g, ""))} placeholder="e.g. 200" /></div>
+            <div><span className="text-[11px] text-muted">Agents / unit</span><input className="input tabular" inputMode="numeric" pattern="[0-9]*" value={perUnit} onChange={(e) => setPerUnit(e.target.value.replace(/[^0-9]/g, ""))} placeholder="1" /></div>
           </div>
           <div className="mt-3 rounded-lg border border-line bg-white/[0.03] p-3 text-sm">
             <div className="flex justify-between"><span className="text-muted">Total agents (seats)</span><b className="tabular">{seats.toLocaleString()}</b></div>
@@ -1341,8 +1341,8 @@ function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
         {/* Checkout */}
         <div>
           <label className="label">Buy seats</label>
-          <input className="input mb-2 tabular" inputMode="numeric" value={buy} onChange={(e) => setBuy(e.target.value.replace(/[^0-9]/g, ""))} placeholder={`Seats to buy${shortfall ? ` (need ${shortfall} more)` : ""}`} />
-          <input className="input mb-2" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="Billing email (receipt)" />
+          <input className="input mb-2 tabular" inputMode="numeric" pattern="[0-9]*" value={buy} onChange={(e) => setBuy(e.target.value.replace(/[^0-9]/g, ""))} placeholder={`Seats to buy${shortfall ? ` (need ${shortfall} more)` : ""}`} />
+          <input className="input mb-2" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="Billing email (receipt)" />
           <div className="text-[11px] text-muted">Amount: <b className="tabular text-ink">₦{((Math.max(1, Number(buy) || shortfall || billable)) * PRICE).toLocaleString()}</b></div>
           <div className="mt-2 flex gap-2">
             <button className="btn-primary flex-1" disabled={busy || !st?.providers.paystack} onClick={() => checkout("PAYSTACK")} title={st?.providers.paystack ? "" : "Set PAYSTACK_SECRET_KEY"}>Pay with Paystack</button>

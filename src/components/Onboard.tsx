@@ -241,8 +241,8 @@ export default function Onboard() {
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><label className="label">Contact email (admin)</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="you@org.ng" /></div>
-          <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
+          <div><label className="label">Contact email (admin)</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="you@org.ng" /></div>
+          <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" autoComplete="tel" inputMode="tel" placeholder="080…" /></div>
         </div>
         <button className="btn-primary w-full" disabled={busy || name.trim().length < 3 || !email.trim() || !scopeReady || slugInfo?.available === false} onClick={submit}>
           {busy ? "Creating…" : "Create my situation room (20 free codes / LGA)"}

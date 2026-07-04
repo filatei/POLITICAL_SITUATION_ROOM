@@ -34,7 +34,7 @@ export default function ContactForm() {
       {err && <div className="mb-3 rounded-lg border border-bad/30 bg-bad/5 px-3 py-2 text-sm text-bad">{err}</div>}
       <div className="grid gap-3 sm:grid-cols-2">
         <div><label className="label">Name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" /></div>
-        <div><label className="label">Email</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="you@example.com" /></div>
+        <div><label className="label">Email</label><input className="input" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" /></div>
       </div>
       <div className="mt-3"><label className="label">Message</label><textarea className="input min-h-28" value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Tell us about your election / tenancy needs…" /></div>
       <button className="btn-primary mt-3 w-full sm:w-auto" disabled={busy || !name.trim() || !email.trim() || !message.trim()} onClick={send}>{busy ? "Sending…" : "Send message"}</button>
