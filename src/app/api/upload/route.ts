@@ -30,13 +30,14 @@ export async function POST(req: NextRequest) {
   if (!sniff) return NextResponse.json({ error: "Unsupported or unrecognized file type." }, { status: 415 });
 
   const sha256 = createHash("sha256").update(buf).digest("hex");
-  // Partition storage per election so tenants never share a flat folder.
-  const bucket = s.electionId ? s.electionId.replace(/[^a-zA-Z0-9_-]/g, "") : "shared";
-  const baseDir = process.env.UPLOAD_DIR || "./public/uploads";
-  const dir = path.join(baseDir, bucket);
+  // Flat storage under the served /uploads directory (matches the static route /
+  // Caddy mapping). The election id is embedded in the filename for traceability
+  // instead of a subfolder, so the file always resolves at /uploads/<name>.
+  const eid = s.electionId ? s.electionId.replace(/[^a-zA-Z0-9_-]/g, "").slice(-8) : "x";
+  const dir = process.env.UPLOAD_DIR || "./public/uploads";
   await mkdir(dir, { recursive: true });
-  const name = `${Date.now()}-${randomUUID()}.${sniff.ext}`;
+  const name = `${Date.now()}-${eid}-${randomUUID()}.${sniff.ext}`;
   await writeFile(path.join(dir, name), buf);
 
-  return NextResponse.json({ url: `/uploads/${bucket}/${name}`, mime: sniff.mime, size: buf.length, sha256 });
+  return NextResponse.json({ url: `/uploads/${name}`, mime: sniff.mime, size: buf.length, sha256 });
 }

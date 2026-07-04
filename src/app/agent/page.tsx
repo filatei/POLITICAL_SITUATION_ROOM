@@ -349,6 +349,7 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
   const [confidence, setConfidence] = useState<"DECLARED" | "PERCEIVED" | "ESTIMATE">("DECLARED");
   const [signed, setSigned] = useState(false);
   const [sheet, setSheet] = useState<File | null>(null);
+  const [fileKey, setFileKey] = useState(0); // bump to remount the file input (clears the chosen file)
   const totalVotes = cands.reduce((s, c) => s + (Number(votes[c.id]) || 0), 0);
 
   async function send() {
@@ -361,7 +362,7 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
         scores, text: `Scores (${confidence.toLowerCase()})` },
       sheet ? [{ file: sheet, kind: "RESULT_SHEET", sheetSigned: signed }] : []
     );
-    setVotes({}); setAccredited(""); setCast(""); setRejected(""); setSheet(null);
+    setVotes({}); setAccredited(""); setCast(""); setRejected(""); setSheet(null); setSigned(false); setFileKey((k) => k + 1);
   }
 
   return (
@@ -395,7 +396,8 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
       </div>
       <div>
         <label className="label">Result sheet photo</label>
-        <input className="input" type="file" accept="image/*" capture="environment" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
+        <input key={fileKey} className="input" type="file" accept="image/*" capture="environment" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
+        {sheet && <p className="mt-1 truncate text-xs text-muted">📎 {sheet.name}</p>}
       </div>
       <button className="btn-primary w-full" disabled={totalVotes <= 0} onClick={send}>Submit scores</button>
       {totalVotes <= 0 && <p className="text-center text-xs text-muted">Enter at least one party&apos;s votes to submit.</p>}
@@ -411,6 +413,7 @@ function IncidentForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promi
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [fileKey, setFileKey] = useState(0); // bump to remount the file input (clears the chosen file)
   const MAX = 25 * 1024 * 1024; // server upload cap
 
   function pick(f: File | null) {
@@ -430,7 +433,7 @@ function IncidentForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promi
     try {
       await onSend({ type: "INCIDENT", channel: "TEXT", text, severity }, file ? [{ file, kind: "INCIDENT" }] : []);
       if (preview) URL.revokeObjectURL(preview);
-      setText(""); setFile(null); setPreview(""); setSeverity("MEDIUM");
+      setText(""); setFile(null); setPreview(""); setSeverity("MEDIUM"); setFileKey((k) => k + 1);
     } finally { setBusy(false); }
   }
 
@@ -448,7 +451,7 @@ function IncidentForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promi
       </div>
       <div>
         <label className="label">Photo or video (optional)</label>
-        <input className="input" type="file" accept="image/*,video/*" onChange={(e) => pick(e.target.files?.[0] || null)} />
+        <input key={fileKey} className="input" type="file" accept="image/*,video/*" capture="environment" onChange={(e) => pick(e.target.files?.[0] || null)} />
         {file && (
           <div className="mt-2 flex items-center gap-3 rounded-lg border border-line bg-white/[0.03] p-2">
             {preview
