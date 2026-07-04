@@ -247,6 +247,41 @@ enum ConstituencyType {
   STATE
 }
 
+// Platform-wide registry of party details harvested from INEC (factual public
+// registration data). Separate from per-election Party rows. Officials/contacts
+// change over time, so every change is logged in PartyRegistryChange.
+model PartyRegistry {
+  code               String   @id // acronym, e.g. APC
+  name               String
+  slug               String? // INEC url slug
+  chairman           String?
+  secretary          String?
+  treasurer          String?
+  financialSecretary String?
+  legalAdviser       String?
+  address            String?
+  email              String?
+  phone              String?
+  logoUrl            String?
+  source             String? // INEC page url
+  checkedAt          DateTime @default(now()) // last harvested/verified
+  updatedAt          DateTime @updatedAt // last time any field changed
+  createdAt          DateTime @default(now())
+  changes            PartyRegistryChange[]
+}
+
+model PartyRegistryChange {
+  id        String        @id @default(cuid())
+  code      String
+  party     PartyRegistry @relation(fields: [code], references: [code], onDelete: Cascade)
+  field     String
+  oldValue  String?
+  newValue  String?
+  changedAt DateTime      @default(now())
+
+  @@index([code, changedAt])
+}
+
 // Server-side backup of an imported constituency file, keyed by state+type, so
 // the constituency map can be rebuilt without re-uploading.
 model ConstituencyImport {
