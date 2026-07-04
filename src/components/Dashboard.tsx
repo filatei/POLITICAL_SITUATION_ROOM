@@ -343,7 +343,8 @@ export default function Dashboard({ session }: { session: Session }) {
                 <article key={g.unit} className="rounded-lg border border-line p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{g.unit}</div>
+                      <div className="truncate text-sm font-semibold">{g.unit && g.unit !== "—" ? g.unit : (it.author || "Unknown unit")}</div>
+                      {it.author && <div className="truncate text-[11px] text-muted">Reported by <span className="font-semibold text-ink/80">{it.author}</span>{it.unitLabel && it.unitLabel !== "—" && it.unitLabel !== g.unit ? ` · ${it.unitLabel}` : ""}</div>}
                       <div className="text-[11px] text-muted">{fmt(it.receivedAt)} · {it.confidence || "—"} · {g.count} report{g.count === 1 ? "" : "s"}</div>
                     </div>
                     <span className={`pill shrink-0 ${it.scoreStatus === "VERIFIED" ? "bg-good/15 text-good" : it.scoreStatus === "DISPUTED" ? "bg-bad/15 text-bad" : "bg-panel"}`}>{it.scoreStatus === "VERIFIED" ? "ACCEPTED" : it.scoreStatus}</span>
