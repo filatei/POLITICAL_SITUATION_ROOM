@@ -30,8 +30,10 @@ export const DEFAULT_PARTIES: PartySeed[] = [
 ];
 
 // Insert the standard ballot for an election, skipping any party code already
-// present (so it is safe to call more than once).
-export async function seedParties(db: any, electionId: string): Promise<number> {
+// present (so it is safe to call more than once). Also ensures every party has
+// a candidate — the score form and tally are per-candidate, so a party with no
+// candidate shows no row for agents to enter votes.
+export async function seedParties(db: any, electionId: string): Promise<{ parties: number; candidates: number }> {
   const existing = await db.party.findMany({ where: { electionId }, select: { code: true } });
   const have = new Set(existing.map((p: any) => p.code));
   const toAdd = DEFAULT_PARTIES.filter((p) => !have.has(p.code));
@@ -41,5 +43,9 @@ export async function seedParties(db: any, electionId: string): Promise<number> 
       skipDuplicates: true,
     });
   }
-  return toAdd.length;
+  // one candidate per party (party-vote ballot) for any party missing one
+  const parties = await db.party.findMany({ where: { electionId }, select: { id: true, name: true, candidates: { select: { id: true } } } });
+  const candData = parties.filter((p: any) => p.candidates.length === 0).map((p: any) => ({ electionId, partyId: p.id, name: p.name }));
+  if (candData.length) await db.candidate.createMany({ data: candData });
+  return { parties: toAdd.length, candidates: candData.length };
 }

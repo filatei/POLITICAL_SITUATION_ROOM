@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
   if (!requireRole(s, ["ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election in scope" }, { status: 404 });
-  const added = await seedParties(db, election.id);
+  const r = await seedParties(db, election.id);
   const total = await db.party.count({ where: { electionId: election.id } });
-  return NextResponse.json({ ok: true, added, total });
+  const candidates = await db.candidate.count({ where: { electionId: election.id } });
+  return NextResponse.json({ ok: true, addedParties: r.parties, addedCandidates: r.candidates, total, candidates });
 }

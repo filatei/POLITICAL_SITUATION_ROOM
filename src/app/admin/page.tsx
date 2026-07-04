@@ -359,6 +359,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
 
       {tab === "settings" && isAdmin && (
         <div className="space-y-4 p-5">
+          <BallotCard onFlash={setFlash} />
           <BrandingCard onFlash={setFlash} />
           <StaffUsers onFlash={setFlash} />
         </div>
@@ -1213,6 +1214,35 @@ function BillingCard({ onFlash }: { onFlash: (s: string) => void }) {
           {st && !st.providers.paystack && !st.providers.squad && <p className="mt-2 text-[11px] text-warn">No payment provider configured yet (set PAYSTACK_SECRET_KEY and/or SQUAD_SECRET_KEY).</p>}
         </div>
       </div>
+    </section>
+  );
+}
+
+/* -------- Ballot: ensure all INEC parties + candidates exist -------- */
+function BallotCard({ onFlash }: { onFlash: (s: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<{ total: number; candidates: number } | null>(null);
+  useEffect(() => {
+    api("/api/admin/parties/seed").then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (j) setInfo({ total: (j.present || j.defaults || []).length && j.present ? j.present.length : 0, candidates: 0 });
+    }).catch(() => {});
+  }, []);
+  async function seed() {
+    setBusy(true);
+    try {
+      const r = await api("/api/admin/parties/seed", { method: "POST" });
+      const j = await r.json();
+      if (r.ok) { onFlash(`Ballot ready: ${j.total} parties, ${j.candidates} candidates (added ${j.addedParties} parties, ${j.addedCandidates} candidates).`); setInfo({ total: j.total, candidates: j.candidates }); }
+      else onFlash(j.error || "Could not seed ballot.");
+    } catch { onFlash("Network error."); }
+    finally { setBusy(false); }
+  }
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Ballot</h2>
+      <p className="text-sm text-muted">Agents enter votes per party under Scores. If the ballot is empty, add all registered INEC parties (each gets a candidate so it shows up).{info ? ` Currently ${info.candidates} candidate${info.candidates === 1 ? "" : "s"} on the ballot.` : ""}</p>
+      <button className="btn-primary mt-3" disabled={busy} onClick={seed}>{busy ? "Adding…" : "Add all INEC parties to the ballot"}</button>
+      <p className="mt-2 text-[11px] text-muted">Then trim any parties not contesting from the list. Safe to run more than once.</p>
     </section>
   );
 }
