@@ -58,6 +58,20 @@ export default function GeoShowcase() {
   const [sel, setSel] = useState<string | null>(null);
   const [lgasBy, setLgasBy] = useState<Record<string, GLga[]>>({});
   const [geo, setGeo] = useState<any>(null);
+  const [cq, setCq] = useState("");
+  const [cres, setCres] = useState<{ id: string; type: string; name: string; code: string | null; state: string; composition: string[] }[]>([]);
+  const [copen, setCopen] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (cq.trim().length < 2) { setCres([]); return; }
+      try {
+        const j = await fetch(`/api/public/constituencies/search?q=${encodeURIComponent(cq.trim())}`).then((r) => r.json());
+        setCres(j.results || []); setCopen(true);
+      } catch { /* ignore */ }
+    }, 220);
+    return () => clearTimeout(t);
+  }, [cq]);
 
   useEffect(() => {
     fetch("/api/public/geo").then((r) => r.json()).then((j) => { setTotals(j.totals); setStates(j.states || []); }).catch(() => {});
@@ -85,9 +99,33 @@ export default function GeoShowcase() {
 
   return (
     <div>
-      <div className="mb-6">
-        <GeoSearch placeholder="Find your polling unit, ward or LGA…" onPick={(h) => { if (byName.has(h.state.toUpperCase())) select(h.state); }} />
-        <p className="mt-1 text-[11px] text-muted">Type your polling unit, ward or LGA — results show the full State › LGA › Ward › Unit path.</p>
+      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        <div>
+          <GeoSearch placeholder="Find your polling unit, ward or LGA…" onPick={(h) => { if (byName.has(h.state.toUpperCase())) select(h.state); }} />
+          <p className="mt-1 text-[11px] text-muted">Polling unit, ward or LGA — full State › LGA › Ward › Unit path.</p>
+        </div>
+        <div>
+          <div className="relative">
+            <input className="input" value={cq} onChange={(e) => setCq(e.target.value)} onFocus={() => cres.length && setCopen(true)}
+              placeholder="Find your constituency or district…" />
+            {copen && cq.trim().length >= 2 && (
+              <div className="absolute z-40 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-line bg-surface shadow-2xl">
+                {!cres.length && <div className="px-3 py-2 text-sm text-muted">No match for “{cq}”.</div>}
+                {cres.map((h) => (
+                  <button key={h.type + h.id} onClick={() => { if (byName.has(h.state.toUpperCase())) select(h.state); setCopen(false); }}
+                    className="flex w-full items-center justify-between gap-2 border-b border-line/50 px-3 py-2 text-left last:border-0 hover:bg-ink/5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{h.name}{h.code ? <span className="ml-1 text-[11px] font-normal text-muted">{h.code}</span> : null}</span>
+                      <span className="block truncate text-[11px] text-muted">{h.state}{h.composition?.length ? ` · ${h.composition.slice(0, 4).join(", ")}${h.composition.length > 4 ? "…" : ""}` : ""}</span>
+                    </span>
+                    <span className={`pill shrink-0 ${h.type === "SENATORIAL" ? "bg-accent/15 text-accent" : h.type === "FEDERAL" ? "bg-good/15 text-good" : "bg-ink/10 text-muted"}`}>{h.type === "SENATORIAL" ? "Senate" : h.type === "FEDERAL" ? "Reps" : "State"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-muted">Senatorial district, federal or state constituency (INEC).</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
