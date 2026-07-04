@@ -141,6 +141,10 @@ function Console({ session }: { session: Session }) {
   }
 
   const isAdmin = session.role === "ADMIN";
+  const [electionName, setElectionName] = useState("");
+  useEffect(() => {
+    api("/api/bootstrap").then((r) => (r.ok ? r.json() : null)).then((j) => j?.election?.name && setElectionName(j.election.name)).catch(() => {});
+  }, []);
   const TABS: { key: AdminTab; label: string }[] = [
     { key: "codes", label: "Agents & Codes" },
     { key: "geo", label: "Geography" },
@@ -158,9 +162,9 @@ function Console({ session }: { session: Session }) {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface/80 px-5 py-3.5 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <img src="/psr-logo.png" alt="PSR" className="h-7 w-auto max-w-[110px] shrink-0 object-contain" />
-          <div className="border-l border-line pl-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin</div>
-            <div className="text-lg font-bold tracking-tight">{tabTitle[tab]}</div>
+          <div className="min-w-0 border-l border-line pl-3">
+            <div className="truncate text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">Admin · {tabTitle[tab]}</div>
+            <div className="truncate text-lg font-bold tracking-tight" title={electionName}>{electionName || "Situation Room"}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
