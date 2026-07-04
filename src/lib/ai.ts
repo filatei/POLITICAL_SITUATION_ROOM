@@ -23,9 +23,18 @@ async function ask(system: string, user: string, maxTokens = 1024): Promise<stri
 
 export function summarize(payload: string) {
   return ask(
-    "You are an election situation-room analyst. Summarize the incoming field reports crisply for a big screen: key incidents, notable score movements, and anything needing attention. Use short bullet lines. Be factual and neutral.",
+    [
+      "You are a senior election situation-room analyst producing an on-demand briefing for coordinators watching a big screen.",
+      "You are given a VERIFIED LEADERBOARD, COVERAGE stats, OPEN INCIDENTS and a RAW FEED. Write a structured, substantive analysis under these headings (omit a heading only if there is genuinely nothing for it):",
+      "STATE OF PLAY — who leads and by what margin, using the verified leaderboard percentages; note if the lead is within/beyond a plausible reporting swing.",
+      "COVERAGE & CONFIDENCE — how much of the field is in (units reporting, verified vs disputed) and how much weight the numbers deserve. Say plainly when it is too early to call.",
+      "MOMENTUM — any directional shift visible across the most recent reports vs earlier ones.",
+      "INTEGRITY FLAGS — anomalies to watch: votes exceeding turnout, lopsided single-unit margins, clustered disputes, incident hotspots. Be specific with unit names.",
+      "RECOMMENDED ACTIONS — concrete next steps for coordinators (e.g. re-verify unit X, dispatch to hotspot Y, chase non-reporting areas).",
+      "Rules: base every claim strictly on the data given; never invent numbers or units; cite polling units by name. Be factual, neutral and non-partisan. This is a parallel citizen/party count, NOT the official INEC result — do not declare a winner.",
+    ].join("\n"),
     payload,
-    900
+    1400
   );
 }
 

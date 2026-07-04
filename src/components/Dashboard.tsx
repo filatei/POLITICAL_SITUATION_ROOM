@@ -50,6 +50,7 @@ export default function Dashboard({ session }: { session: Session }) {
   const [tally, setTally] = useState<Tally | null>(null);
   const [big, setBig] = useState(false);
   const [summary, setSummary] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [q, setQ] = useState(""); const [answer, setAnswer] = useState(""); const [asking, setAsking] = useState(false);
   const canVerify = ["ADMIN", "COORDINATOR", "ANALYST"].includes(session.role);
   const tallyTimer = useRef<any>(null);
@@ -74,7 +75,14 @@ export default function Dashboard({ session }: { session: Session }) {
       setFeed(subs);
     }
   }
-  async function loadSummary() { const r = await api("/api/ai/summary"); if (r.ok) setSummary((await r.json()).summary); }
+  // AI analysis is on-demand only — it never auto-runs. It generates a fresh
+  // read of the room ONLY when a coordinator explicitly clicks "Generate".
+  async function loadSummary() {
+    if (summaryLoading) return;
+    setSummaryLoading(true);
+    try { const r = await api("/api/ai/summary"); if (r.ok) setSummary((await r.json()).summary); }
+    finally { setSummaryLoading(false); }
+  }
   async function loadInstr() { const r = await api("/api/instructions"); if (r.ok) setInstrLog((await r.json()).instructions || []); }
   async function loadPresence() { const r = await api("/api/presence"); if (r.ok) setPresence(await r.json()); }
   function scheduleTally() { clearTimeout(tallyTimer.current); tallyTimer.current = setTimeout(loadTally, 800); }
@@ -110,7 +118,7 @@ export default function Dashboard({ session }: { session: Session }) {
 
   useEffect(() => {
     api("/api/bootstrap").then(async (r) => r.ok && setElection((await r.json()).election));
-    loadFeed(); loadTally(); loadSummary(); loadInstr(); loadPresence();
+    loadFeed(); loadTally(); loadInstr(); loadPresence();
 
     // Live over Socket.IO (bridged from the server event bus).
     const sock = getSocket();
@@ -135,8 +143,7 @@ export default function Dashboard({ session }: { session: Session }) {
     // Poll tally + presence as a fallback: Cloudflare idles websockets out after
     // ~100s, so we can't rely on presence:update alone to keep "online" current.
     const poll = setInterval(() => { loadTally(); loadPresence(); }, 15000);
-    const aiPoll = setInterval(loadSummary, 60000);
-    return () => { sock.off("live", onLive); sock.off("presence:update"); sock.off("receipt:update"); sock.off("instruction:new"); clearInterval(poll); clearInterval(aiPoll); };
+    return () => { sock.off("live", onLive); sock.off("presence:update"); sock.off("receipt:update"); sock.off("instruction:new"); clearInterval(poll); };
   }, []); // eslint-disable-line
 
   async function sendInstruction() {
@@ -429,9 +436,13 @@ export default function Dashboard({ session }: { session: Session }) {
           <div className="card p-4">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold">AI analysis</h2>
-              <button className="text-xs text-accent underline" onClick={loadSummary}>Refresh</button>
+              <button className="text-xs text-accent underline disabled:opacity-50" onClick={loadSummary} disabled={summaryLoading}>
+                {summaryLoading ? "Analyzing…" : summary ? "Regenerate" : "Generate"}
+              </button>
             </div>
-            <div className="whitespace-pre-wrap text-sm text-ink">{summary || "No summary yet."}</div>
+            {summary
+              ? <div className="whitespace-pre-wrap text-sm text-ink">{summary}</div>
+              : <p className="text-sm text-muted">On-demand only. Click <span className="text-accent">Generate</span> for a full read of the room — leaderboard, turnout, momentum, integrity flags and recommended actions.</p>}
           </div>
 
           <div className="card p-4">
