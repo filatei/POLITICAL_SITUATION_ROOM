@@ -32,8 +32,8 @@ function getTransport() {
   return transport;
 }
 
-export async function sendMail(opts: { to: string; subject: string; text: string; replyTo?: string }) {
+export async function sendMail(opts: { to: string; subject: string; text: string; html?: string; replyTo?: string }) {
   if (!mailEnabled) return { ok: false, reason: "mail-not-configured" };
-  await getTransport().sendMail({ from: FROM, to: opts.to, subject: opts.subject, text: opts.text, replyTo: opts.replyTo });
+  await getTransport().sendMail({ from: FROM, to: opts.to, subject: opts.subject, text: opts.text, html: opts.html, replyTo: opts.replyTo });
   return { ok: true };
 }
