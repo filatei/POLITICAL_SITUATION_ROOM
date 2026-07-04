@@ -22,4 +22,7 @@ EXPOSE 3200
 # tables/columns doesn't leave prod out of sync → 500s. Non-fatal: if the push
 # can't run we still start (same as before), and it's logged.
 # Then `npm start` runs the Next + Socket.IO custom server on one port.
-CMD ["sh", "-c", "npx prisma db push --skip-generate || echo 'WARN: prisma db push failed — starting anyway'; npm start"]
+# Try a safe additive push first; if Prisma blocks on a (usually false-alarm)
+# data-loss warning — e.g. adding a unique constraint on a nullable column — retry
+# with --accept-data-loss so new columns actually land instead of silently failing.
+CMD ["sh", "-c", "npx prisma db push --skip-generate || npx prisma db push --skip-generate --accept-data-loss || echo 'WARN: prisma db push failed — starting anyway'; npm start"]

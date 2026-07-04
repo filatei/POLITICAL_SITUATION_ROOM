@@ -21,16 +21,19 @@ echo "-- tally        -> $(code "${AUTH[@]}" "$BASE/api/tally")"
 echo "-- agents(list) -> $(code "${AUTH[@]}" "$BASE/api/admin/agents")"
 echo "-- billing/seats-> $(code "${AUTH[@]}" "$BASE/api/billing/seats" 2>/dev/null)"
 
-echo "-- unit search (q=biagbeni):"
-UNITS=$(curl -s "${AUTH[@]}" "$BASE/api/admin/units?q=biagbeni")
+Q="${PSR_UNIT_Q:-biagbeni}"
+echo "-- unit search (q=$Q):"
+UNITS=$(curl -s "${AUTH[@]}" "$BASE/api/admin/units?q=$Q")
 echo "   ${UNITS:0:240}"
-UID=$(printf '%s' "$UNITS" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log((JSON.parse(s).units||[])[0]?.id||"")}catch{console.log("")}})')
-echo "   picked unit id: ${UID:-<none>}"
+# Pull the first id inside the "units":[ ... ] array (portable: python3, else sed).
+PUID=$(printf '%s' "$UNITS" | python3 -c 'import sys,json;u=(json.load(sys.stdin).get("units") or []);print(u[0]["id"] if u else "")' 2>/dev/null)
+[ -z "$PUID" ] && PUID=$(printf '%s' "$UNITS" | sed -n 's/.*"units":\[{"id":"\([^"]*\)".*/\1/p')
+echo "   picked unit id: ${PUID:-<none>}"
 
-if [ -n "$UID" ]; then
+if [ -n "$PUID" ]; then
   echo "-- create agent (full response):"
   curl -sS -i -X POST "${AUTH[@]}" "${JSON[@]}" "$BASE/api/admin/agents" \
-    -d "{\"name\":\"Smoke Test\",\"pollingUnitId\":\"$UID\"}" | sed -n '1,25p'
+    -d "{\"name\":\"Smoke Test\",\"pollingUnitId\":\"$PUID\"}" | sed -n '1,25p'
 else
-  echo "!! no unit id resolved — check the unit search output above"
+  echo "!! no unit id resolved (no matching units for q=$Q) — try PSR_UNIT_Q=<term>"
 fi
