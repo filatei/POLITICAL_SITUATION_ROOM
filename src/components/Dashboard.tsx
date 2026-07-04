@@ -29,7 +29,13 @@ const sevColor: Record<string, string> = {
 const typeColor: Record<string, string> = {
   INCIDENT: "bg-bad/10 text-bad", SCORE: "bg-accent/10 text-accent", MESSAGE: "bg-panel text-ink", STATUS: "bg-panel text-muted",
 };
+// AI analysis + assistant are shelved for now — flip to re-enable.
+const AI_ENABLED = false;
 const fmt = (s?: string) => (s ? new Date(s).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
+// Media is served via /api/uploads/<name>. Older records stored the raw
+// /uploads/<name> path (which the static handler doesn't serve behind the
+// container volume) — rewrite those so they resolve too.
+const mediaUrl = (u?: string) => (u && u.startsWith("/uploads/") ? "/api" + u : u || "");
 // Bulk-created agents are named "Agent <unit>", which duplicates the unit label.
 // Drop the author when it's already contained in the unit label.
 function sourceLabel(author?: string, unitLabel?: string): string {
@@ -361,10 +367,10 @@ export default function Dashboard({ session }: { session: Session }) {
                   {!!it.media?.length && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {it.media.map((m, i) => m.mime.startsWith("video/")
-                        ? <video key={i} src={m.url} controls className="h-24 rounded border border-line" />
+                        ? <video key={i} src={mediaUrl(m.url)} controls className="h-24 rounded border border-line" />
                         : m.mime.startsWith("audio/")
-                          ? <audio key={i} src={m.url} controls className="w-full" />
-                          : <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.thumbUrl || m.url} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
+                          ? <audio key={i} src={mediaUrl(m.url)} controls className="w-full" />
+                          : <a key={i} href={mediaUrl(m.url)} target="_blank" rel="noreferrer"><img src={mediaUrl(m.thumbUrl || m.url)} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
                     </div>
                   )}
                   {canVerify && (
@@ -399,10 +405,10 @@ export default function Dashboard({ session }: { session: Session }) {
                   {!!it.media?.length && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {it.media.map((m, i) => m.mime.startsWith("video/")
-                        ? <video key={i} src={m.url} controls className="h-24 rounded border border-line" />
+                        ? <video key={i} src={mediaUrl(m.url)} controls className="h-24 rounded border border-line" />
                         : m.mime.startsWith("audio/")
-                          ? <audio key={i} src={m.url} controls className="w-full" />
-                          : <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.thumbUrl || m.url} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
+                          ? <audio key={i} src={mediaUrl(m.url)} controls className="w-full" />
+                          : <a key={i} href={mediaUrl(m.url)} target="_blank" rel="noreferrer"><img src={mediaUrl(m.thumbUrl || m.url)} className="h-24 rounded border border-line object-cover" alt={m.kind} /></a>)}
                     </div>
                   )}
                   <div className="mt-2 text-xs text-muted">{sourceLabel(it.author, it.unitLabel)}</div>
@@ -458,22 +464,27 @@ export default function Dashboard({ session }: { session: Session }) {
             </div>
           )}
 
-          <div className="card p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">AI analysis</h2>
-              <button className="text-xs text-accent underline disabled:opacity-50" onClick={loadSummary} disabled={summaryLoading}>
-                {summaryLoading ? "Analyzing…" : summary ? "Regenerate" : "Generate"}
-              </button>
-            </div>
-            {summary
-              ? <div className="whitespace-pre-wrap text-sm text-ink">{summary}</div>
-              : <p className="text-sm text-muted">On-demand only. Click <span className="text-accent">Generate</span> for a full read of the room — leaderboard, turnout, momentum, integrity flags and recommended actions.</p>}
-          </div>
+          {/* AI analysis + assistant shelved for now (AI_ENABLED). */}
+          {AI_ENABLED && (
+            <>
+              <div className="card p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">AI analysis</h2>
+                  <button className="text-xs text-accent underline disabled:opacity-50" onClick={loadSummary} disabled={summaryLoading}>
+                    {summaryLoading ? "Analyzing…" : summary ? "Regenerate" : "Generate"}
+                  </button>
+                </div>
+                {summary
+                  ? <div className="whitespace-pre-wrap text-sm text-ink">{summary}</div>
+                  : <p className="text-sm text-muted">On-demand only. Click <span className="text-accent">Generate</span> for a full read of the room — leaderboard, turnout, momentum, integrity flags and recommended actions.</p>}
+              </div>
 
-          <div className="card p-4">
-            <h2 className="mb-2 text-sm font-semibold">Ask the assistant</h2>
-            <AiChat compact />
-          </div>
+              <div className="card p-4">
+                <h2 className="mb-2 text-sm font-semibold">Ask the assistant</h2>
+                <AiChat compact />
+              </div>
+            </>
+          )}
         </section>
       </main>
     </div>

@@ -39,5 +39,8 @@ export async function POST(req: NextRequest) {
   const name = `${Date.now()}-${eid}-${randomUUID()}.${sniff.ext}`;
   await writeFile(path.join(dir, name), buf);
 
-  return NextResponse.json({ url: `/uploads/${name}`, mime: sniff.mime, size: buf.length, sha256 });
+  // Serve through the API (reads from UPLOAD_DIR) so the URL resolves regardless
+  // of where the volume is mounted — static /uploads/* serving is unreliable
+  // behind the custom server + container volume.
+  return NextResponse.json({ url: `/api/uploads/${name}`, mime: sniff.mime, size: buf.length, sha256 });
 }

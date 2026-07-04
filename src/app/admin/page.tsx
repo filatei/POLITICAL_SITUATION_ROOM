@@ -90,11 +90,13 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   const [agentQ, setAgentQ] = useState("");
   const [agentFilter, setAgentFilter] = useState<"all" | "unused" | "active">("all");
   const [edit, setEdit] = useState<{ id: string; name: string; phone: string } | null>(null);
+  const [copied, setCopied] = useState("");
 
   function copyText(text: string) {
     navigator.clipboard?.writeText(text);
-    setFlash(`Copied: ${text}`);
-    setTimeout(() => setFlash(""), 2000);
+    // High-z toast (renders above modals) — the older `flash` sits behind them.
+    setCopied(text);
+    setTimeout(() => setCopied(""), 1800);
   }
 
   async function load() {
@@ -245,6 +247,9 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   const superConsole = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/admin";
   // Tenant-relative base ("/{slug}") so Dashboard + invite links stay in-tenant.
   const tenantBase = typeof window !== "undefined" ? tenantFromPath(window.location.pathname).base : "";
+  // Bulk code-generation is disabled for now (agents are registered individually).
+  // Flip to true to bring the panel back.
+  const BULK_ENABLED = false;
   const [electionName, setElectionName] = useState("");
   useEffect(() => {
     if (superConsole) return;
@@ -329,9 +334,9 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
           </div>
         </section>
 
-        {/* Bulk generate — drill down LGA → Ward → Unit. Super-admins only:
-            tenant admins register known agents individually. */}
-        {isSuper && (
+        {/* Bulk generate — drill down LGA → Ward → Unit. Disabled for now
+            (agents are registered individually); flip BULK_ENABLED to restore. */}
+        {BULK_ENABLED && (
         <section className="card p-5">
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Bulk: generate codes by area</h2>
           <div className="space-y-2">
@@ -402,7 +407,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
 
         {/* Agent management. When the super-only bulk panel is hidden this takes
             the freed column so tenant admins get a roomier list. */}
-        <section className={`card p-5 ${isSuper ? "" : "lg:col-span-2"}`}>
+        <section className={`card p-5 ${BULK_ENABLED ? "" : "lg:col-span-2"}`}>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Agent management ({filteredAgents.length}/{agents.length})</h2>
             <button className="text-xs text-accent hover:underline" onClick={exportCsv}>Export CSV</button>
@@ -498,6 +503,12 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
 
       {qr && <QrModal code={qr.code} label={qr.label} onClose={() => setQr(null)} onCopy={copyText} />}
       {openAgent && <AgentDetailModal id={openAgent} onClose={() => { setOpenAgent(null); load(); }} onFlash={setFlash} onQr={(code, label) => setQr({ code, label })} onCopy={copyText} />}
+
+      {copied && (
+        <div className="fixed bottom-6 left-1/2 z-[120] -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-bg shadow-lg" role="status">
+          Copied ✓ <span className="ml-1 max-w-[60vw] truncate align-middle text-xs font-normal opacity-70">{copied}</span>
+        </div>
+      )}
     </div>
   );
 }
