@@ -18,9 +18,9 @@ realtime, and performance. Status legend: ✅ fixed · ⏳ remaining (prioritize
   agent's own token election, so a tampered cookie can't misfile a report.
 
 ## HIGH
-- ⏳ **H1 Branding is a global singleton** — one tenant's edit rewrites everyone's logo/
-  name/accent. Fix: key `Branding` by `electionId`; read/write the scoped tenant's row.
-  (`prisma/schema.prisma`, `lib/brand.ts`, `admin/branding`)
+- ✅ **H1 Branding was a global singleton** — now keyed by `electionId`; `getBrand()`
+  resolves the tenant via the cookie (landing keeps PSR default); admin PATCH upserts the
+  scoped election's row only.
 - ✅ **H2 Instructions GET unscoped** → now filtered by election.
 - ✅ **H3 ai/ask fed cross-tenant field data** → now scoped by election.
 - ⏳ **H4 `psr_tenant` cookie is client-set (not httpOnly).** Prefer deriving tenant from
@@ -37,8 +37,8 @@ realtime, and performance. Status legend: ✅ fixed · ⏳ remaining (prioritize
   shared store (Redis) keyed by IP.
 - ⏳ **M3** Add zod schemas to remaining mutating routes (agents POST/PATCH, branding,
   instructions POST, change-pin, geo POST).
-- ⏳ **M4** `tally`/`bootstrap` count all polling units platform-wide — scope unit counts
-  to the election's state/constituency.
+- ✅ **M4 (tally)** unit denominator now scoped to the election's state/constituency.
+  ⏳ `bootstrap` still counts platform-wide — scope it too.
 - ⏳ **M5** `geo/import` + `geo/harvest` return raw Prisma error messages — log server-side,
   return generic text.
 
@@ -48,8 +48,8 @@ realtime, and performance. Status legend: ✅ fixed · ⏳ remaining (prioritize
   expiry. Add a token version or shorter expiry + refresh.
 
 ## PERFORMANCE (remaining)
-- ⏳ **P1** `tally` loads all SCORE rows and sums in JS on every 15s poll — aggregate in
-  SQL (`groupBy`) scoped by election; cache a few seconds.
+- ✅ **P1** `tally` now aggregates in SQL (`groupBy` for party sums + `aggregate` for
+  turnout + `distinct` for reporting units) instead of loading every score row into JS.
 - ⏳ **P4** `agents/bulk` does a count + up-to-10 uniqueness `findUnique`s inside a per-unit
   loop — pre-generate codes and `createMany`.
 - ⏳ **P3** Add indexes: `Agent(electionId, pollingUnitId)`, `InstructionReceipt(agentId, status)`.
