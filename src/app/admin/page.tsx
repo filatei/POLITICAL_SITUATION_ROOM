@@ -4,6 +4,7 @@ import { api, logout } from "@/lib/session";
 import RoomLogin from "@/components/RoomLogin";
 import QrModal from "@/components/QrModal";
 import { confirmDialog, alertDialog, promptDialog } from "@/components/Dialog";
+import SearchSelect from "@/components/SearchSelect";
 import ThemeToggle from "@/components/ThemeToggle";
 import AiChat from "@/components/AiChat";
 import GeoSearch from "@/components/GeoSearch";
@@ -62,6 +63,10 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   const [flash, setFlash] = useState("");
   const [tab, setTab] = useState<AdminTab>("codes");
   const [bulkLga, setBulkLga] = useState("");
+  const [bulkWard, setBulkWard] = useState("");
+  const [bulkUnit, setBulkUnit] = useState("");
+  const [bulkWards, setBulkWards] = useState<{ id: string; label: string; units: number }[]>([]);
+  const [bulkUnits, setBulkUnits] = useState<{ id: string; label: string }[]>([]);
   const [perUnit, setPerUnit] = useState("1");
   const [bulkResult, setBulkResult] = useState<{ name: string; inviteCode: string; unitLabel: string }[] | null>(null);
   const [qr, setQr] = useState<{ code: string; label?: string } | null>(null);
@@ -98,10 +103,29 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
     else setFlash(j.error || "Failed");
   }
 
-  async function bulk() {
+  // Drill-down: when LGA changes load its wards (reset deeper); when ward changes
+  // load its units (reset deeper).
+  useEffect(() => {
+    setBulkWard(""); setBulkUnit(""); setBulkWards([]); setBulkUnits([]);
     if (!bulkLga) return;
+    api(`/api/admin/geo?lgaId=${bulkLga}`).then(async (r) => {
+      if (r.ok) setBulkWards(((await r.json()).wards || []).map((w: any) => ({ id: w.id, label: w.name, units: w.units || 0 })));
+    });
+  }, [bulkLga]);
+  useEffect(() => {
+    setBulkUnit(""); setBulkUnits([]);
+    if (!bulkWard) return;
+    api(`/api/admin/geo?wardId=${bulkWard}`).then(async (r) => {
+      if (r.ok) setBulkUnits(((await r.json()).units || []).map((u: any) => ({ id: u.id, label: u.name })));
+    });
+  }, [bulkWard]);
+
+  async function bulk() {
+    if (!bulkLga && !bulkWard && !bulkUnit) return;
     setBusy(true); setBulkResult(null);
-    const r = await api("/api/admin/agents/bulk", { method: "POST", body: JSON.stringify({ lgaId: bulkLga, perUnit: Number(perUnit) || 1 }) });
+    // Deepest selection wins: unit → ward → LGA.
+    const body = { perUnit: Number(perUnit) || 1, ...(bulkUnit ? { unitId: bulkUnit } : bulkWard ? { wardId: bulkWard } : { lgaId: bulkLga }) };
+    const r = await api("/api/admin/agents/bulk", { method: "POST", body: JSON.stringify(body) });
     setBusy(false);
     const j = await r.json();
     if (r.ok) { setBulkResult(j.created); setFlash(`Generated ${j.count} codes`); load(); }
@@ -226,21 +250,38 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
           </div>
         </section>
 
-        {/* Bulk generate */}
+        {/* Bulk generate — drill down LGA → Ward → Unit */}
         <section className="card p-5">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Bulk: codes per unit in an LGA</h2>
-          <select className="input mb-2" value={bulkLga} onChange={(e) => setBulkLga(e.target.value)}>
-            <option value="">Select LGA…</option>
-            {lgas.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-          <div className="flex items-end gap-2">
-            <div className="w-32">
+          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Bulk: generate codes by area</h2>
+          <div className="space-y-2">
+            <div>
+              <label className="label">LGA</label>
+              <SearchSelect value={bulkLga} onChange={setBulkLga} options={lgas.map((l) => ({ id: l.id, label: l.name }))} placeholder="Select LGA…" />
+            </div>
+            <div>
+              <label className="label">Ward <span className="text-muted">(optional)</span></label>
+              <SearchSelect value={bulkWard} onChange={setBulkWard} options={bulkWards} placeholder={bulkLga ? "All wards in LGA" : "Pick an LGA first"} disabled={!bulkLga} />
+            </div>
+            <div>
+              <label className="label">Unit <span className="text-muted">(optional)</span></label>
+              <SearchSelect value={bulkUnit} onChange={setBulkUnit} options={bulkUnits} placeholder={bulkWard ? "All units in ward" : "Pick a ward first"} disabled={!bulkWard} />
+            </div>
+          </div>
+          <div className="mt-2 flex items-end gap-2">
+            <div className="w-28">
               <label className="label">Codes / unit</label>
               <input className="input tabular" type="number" min={1} max={10} value={perUnit} onChange={(e) => setPerUnit(e.target.value.replace(/[^0-9]/g, ""))} />
             </div>
-            <button className="btn-primary flex-1" disabled={busy || !bulkLga} onClick={bulk}>{busy ? "Generating…" : "Generate"}</button>
+            <button className="btn-primary flex-1" disabled={busy || (!bulkLga && !bulkWard && !bulkUnit)} onClick={bulk}>{busy ? "Generating…" : "Generate"}</button>
           </div>
-          <p className="mt-2 text-[11px] text-muted">Mints this many <b>fresh</b> codes for <b>every</b> unit in the LGA. Run it again to add more — existing codes are kept, new distinct ones are added.</p>
+          {(() => {
+            const n = Number(perUnit) || 1;
+            if (!bulkLga) return <p className="mt-2 text-[11px] text-muted">Pick an LGA. Add a ward or a specific unit to narrow it down — codes are only minted for the level you choose.</p>;
+            const unitsN = bulkUnit ? 1 : bulkWard ? (bulkWards.find((w) => w.id === bulkWard)?.units || bulkUnits.length || 0)
+              : bulkWards.reduce((s, w) => s + w.units, 0);
+            const where = bulkUnit ? "this unit" : bulkWard ? "this ward" : "this LGA";
+            return <p className="mt-2 text-[11px] text-muted">Will mint <b>{unitsN ? n * unitsN : n}</b> fresh code{n * unitsN === 1 ? "" : "s"} — {n} per unit across <b>{unitsN || "?"}</b> unit{unitsN === 1 ? "" : "s"} in {where}. Re-run to top up (existing codes kept).</p>;
+          })()}
 
           {bulkLga && (
             <div className="mt-3 border-t border-line pt-3">

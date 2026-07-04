@@ -7,27 +7,30 @@ import { seatStatus } from "@/lib/seats";
 
 export const runtime = "nodejs";
 
-// Generate `perUnit` fresh codes for EVERY polling unit in an LGA. This is
-// additive: running it again on the same LGA mints another set of distinct
-// codes (units aren't skipped just because they already have codes), so an
-// admin can top up as more field agents come on board.
+// Generate `perUnit` fresh codes for the SELECTED scope, drilling down
+// LGA → Ward → Unit: pass unitId for a single unit, wardId for every unit in a
+// ward, or lgaId for every unit in an LGA. Additive: re-running mints another
+// distinct set (units aren't skipped), so an admin can top up over time.
 export async function POST(req: NextRequest) {
   const s = await getSession(req);
   if (!requireRole(s, ["ADMIN", "COORDINATOR"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { lgaId, perUnit } = await req.json();
-  if (!lgaId) return NextResponse.json({ error: "lgaId required." }, { status: 400 });
+  const { lgaId, wardId, unitId, perUnit } = await req.json();
+  if (!lgaId && !wardId && !unitId) return NextResponse.json({ error: "Select an LGA, ward or unit." }, { status: 400 });
   const n = Math.min(Math.max(Number(perUnit) || 1, 1), 10); // 1..10 codes per unit
 
   const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
+  // Deepest selection wins: unit → ward → LGA.
+  const where = unitId ? { id: unitId } : wardId ? { wardId } : { lgaId };
+  const scopeLabel = unitId ? "unit" : wardId ? "ward" : "LGA";
   const units = await db.pollingUnit.findMany({
-    where: { lgaId },
+    where,
     include: { ward: true, lga: true },
     orderBy: { name: "asc" },
     take: 500,
   });
-  if (!units.length) return NextResponse.json({ error: "No polling units in this LGA." }, { status: 404 });
+  if (!units.length) return NextResponse.json({ error: `No polling units in this ${scopeLabel}.` }, { status: 404 });
 
   // Cap generation to available seats — you can browse all units, but only make
   // as many codes as your plan allows.
@@ -52,7 +55,8 @@ export async function POST(req: NextRequest) {
       created.push({ name: agent.name, inviteCode: agent.inviteCode, unitLabel: `${u.name} · ${u.ward.name} · ${u.lga.name}` });
     }
   }
-  await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:bulk", entity: "Lga", entityId: lgaId, meta: { count: created.length, perUnit: n, units: units.length } } });
+  const entityId = unitId || wardId || lgaId;
+  await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:bulk", entity: scopeLabel, entityId, meta: { count: created.length, perUnit: n, units: units.length, scope: scopeLabel } } });
   const capped = seats ? created.length >= cap : false;
   return NextResponse.json({ ok: true, count: created.length, created, capped, seatsAvailable: seats ? Math.max(0, cap - created.length) : null });
 }

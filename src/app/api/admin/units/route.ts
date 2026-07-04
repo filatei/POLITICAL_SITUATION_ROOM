@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
+import { scopedElection } from "@/lib/election-scope";
 
 export const runtime = "nodejs";
 
@@ -11,9 +12,18 @@ export async function GET(req: NextRequest) {
   const q = url.searchParams.get("q")?.trim();
   const lgaId = url.searchParams.get("lgaId") || undefined;
 
-  const lgas = await db.lga.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  // Constrain geography to the election's state (e.g. an Ondo governorship shows
+  // only Ondo LGAs/units). National contests have no state scope → show all.
+  const election = await scopedElection();
+  const stateId = election?.scopeStateId || undefined;
+
+  const lgas = await db.lga.findMany({
+    where: stateId ? { stateId } : {},
+    orderBy: { name: "asc" }, select: { id: true, name: true },
+  });
   const units = await db.pollingUnit.findMany({
     where: {
+      ...(stateId ? { stateId } : {}),
       ...(lgaId ? { lgaId } : {}),
       ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { code: { contains: q, mode: "insensitive" } }] } : {}),
     },
