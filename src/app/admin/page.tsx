@@ -11,6 +11,16 @@ import GeoSearch from "@/components/GeoSearch";
 import RootTenantGate from "@/components/RootTenantGate";
 import type { Session } from "@/lib/auth";
 
+// Safely turn any API error payload (string, or a zod flatten object) into text.
+function errText(j: any): string {
+  if (!j) return "";
+  if (typeof j.error === "string") return j.error;
+  const fe = j.error?.formErrors;
+  if (Array.isArray(fe) && fe.length) return fe.join(", ");
+  if (typeof j.error === "object") { try { return JSON.stringify(j.error); } catch { return "Invalid request."; } }
+  return "";
+}
+
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
 type Lga = { id: string; name: string };
 type Agent = { id: string; name: string; phone?: string; email?: string | null; inviteCode: string; status: string; unitLabel: string; unit?: string | null; lgaId?: string | null; usedAt?: string | null; lastSeenAt?: string | null };
@@ -119,11 +129,21 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   async function createAgent() {
     if (!name.trim() || !unitId) return;
     setBusy(true);
-    const r = await api("/api/admin/agents", { method: "POST", body: JSON.stringify({ name, phone, email: agentEmail, pollingUnitId: unitId }) });
-    setBusy(false);
-    const j = await r.json();
-    if (r.ok) { setFlash(`Created ${j.agent.name} — code ${j.agent.inviteCode}`); setName(""); setPhone(""); setAgentEmail(""); load(); }
-    else setFlash(j.error || "Failed");
+    try {
+      const r = await api("/api/admin/agents", { method: "POST", body: JSON.stringify({ name, phone, email: agentEmail, pollingUnitId: unitId }) });
+      const j = await r.json().catch(() => ({} as any));
+      if (r.ok && j.agent) {
+        setName(""); setPhone(""); setAgentEmail(""); setUnitId(""); setQ("");
+        load();
+        await alertDialog({ title: "Code created", body: `${j.agent.name}\nCode: ${j.agent.inviteCode}\n${j.agent.unitLabel || ""}` });
+      } else {
+        await alertDialog({ title: "Couldn’t create code", body: errText(j) || `Request failed (HTTP ${r.status}).` });
+      }
+    } catch {
+      await alertDialog({ title: "Network error", body: "Couldn’t reach the server. Check your connection and try again." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Drill-down: when LGA changes load its wards (reset deeper); when ward changes
@@ -148,11 +168,20 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
     setBusy(true); setBulkResult(null);
     // Deepest selection wins: unit → ward → LGA.
     const body = { perUnit: Number(perUnit) || 1, ...(bulkUnit ? { unitId: bulkUnit } : bulkWard ? { wardId: bulkWard } : { lgaId: bulkLga }) };
-    const r = await api("/api/admin/agents/bulk", { method: "POST", body: JSON.stringify(body) });
-    setBusy(false);
-    const j = await r.json();
-    if (r.ok) { setBulkResult(j.created); setFlash(`Generated ${j.count} codes`); load(); }
-    else setFlash(j.error || "Failed");
+    try {
+      const r = await api("/api/admin/agents/bulk", { method: "POST", body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({} as any));
+      if (r.ok) {
+        setBulkResult(j.created); load();
+        await alertDialog({ title: "Codes generated", body: `Created ${j.count} code${j.count === 1 ? "" : "s"}.${j.capped ? " (capped by your seat limit — buy more seats to add the rest.)" : ""}` });
+      } else {
+        await alertDialog({ title: "Couldn’t generate codes", body: errText(j) || `Request failed (HTTP ${r.status}).` });
+      }
+    } catch {
+      await alertDialog({ title: "Network error", body: "Couldn’t reach the server. Check your connection and try again." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function reset(id: string) {
