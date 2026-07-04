@@ -4,6 +4,7 @@ import { EventEmitter } from "events";
 // situation-room SSE clients. Kept on globalThis so it survives dev HMR.
 export type LiveEvent = {
   kind: "submission" | "score" | "verify" | "ping";
+  electionId?: string; // routes the event to that election's dashboard room
   payload: unknown;
   at: string;
 };

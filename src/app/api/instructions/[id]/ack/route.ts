@@ -18,6 +18,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     data: { status: st, deliveredAt: new Date(), ...(st === "READ" ? { readAt: new Date() } : {}) },
   });
   if (!r.count) return NextResponse.json({ error: "No receipt." }, { status: 404 });
-  emitDashboard("receipt:update", { instructionId: params.id, agentId: s.sub, status: st });
+  if (s.electionId) emitDashboard(s.electionId, "receipt:update", { instructionId: params.id, agentId: s.sub, status: st });
   return NextResponse.json({ ok: true, status: st });
 }

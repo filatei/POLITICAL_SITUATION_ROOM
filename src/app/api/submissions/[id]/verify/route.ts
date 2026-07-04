@@ -24,6 +24,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   await db.auditLog.create({
     data: { actorType: s!.kind, actorId: s!.sub, action: `score:${status}`, entity: "Submission", entityId: params.id },
   });
-  publish({ kind: "verify", payload: { id: params.id, status } });
+  publish({ kind: "verify", electionId: updated.electionId, payload: { id: params.id, status } });
   return NextResponse.json({ ok: true, id: updated.id, status });
 }

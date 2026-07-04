@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     scores: created.scores.map((x) => ({ party: x.candidate.party.code, color: x.candidate.party.color, votes: x.votes })),
     media: created.media.map((m) => ({ url: m.url, thumbUrl: m.thumbUrl, kind: m.kind, mime: m.mime })),
   };
-  publish({ kind: "submission", payload: wire });
+  publish({ kind: "submission", electionId: election.id, payload: wire });
   return NextResponse.json({ ok: true, id: created.id, submission: wire });
 }
 

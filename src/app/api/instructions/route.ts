@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       });
     }
   }
-  emitDashboard("instruction:new", { id: instruction.id, target, targetId, recipients: agentIds.length });
+  emitDashboard(election.id, "instruction:new", { id: instruction.id, target, targetId, recipients: agentIds.length });
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "instruction:send", entity: "Instruction", entityId: instruction.id, meta: { target, recipients: agentIds.length } } });
 
   return NextResponse.json({ ok: true, id: instruction.id, recipients: agentIds.length });

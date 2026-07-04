@@ -54,7 +54,13 @@ export default function Dashboard({ session }: { session: Session }) {
   const [q, setQ] = useState(""); const [answer, setAnswer] = useState(""); const [asking, setAsking] = useState(false);
   const canVerify = ["ADMIN", "COORDINATOR", "ANALYST"].includes(session.role);
   const tallyTimer = useRef<any>(null);
-  const [presence, setPresence] = useState<{ count: number; online: { agentId: string; name: string }[] }>({ count: 0, online: [] });
+  const [presence, setPresence] = useState<{
+    count: number;
+    online: { agentId: string; name: string; unitLabel?: string | null }[];
+    active?: { agentId: string; name: string; unitLabel?: string | null; live?: boolean }[];
+    activeCount?: number;
+    totalAgents?: number;
+  }>({ count: 0, online: [] });
   const [instrBody, setInstrBody] = useState(""); const [instrSev, setInstrSev] = useState("INFO"); const [sending, setSending] = useState(false);
   const [instrLog, setInstrLog] = useState<any[]>([]);
 
@@ -425,11 +431,30 @@ export default function Dashboard({ session }: { session: Session }) {
                 ))}
                 {!instrLog.length && <p className="text-muted">No instructions sent.</p>}
               </div>
-              {presence.online?.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1 border-t border-line pt-2">
-                  {presence.online.map((a) => <span key={a.agentId} className="pill bg-good/10 text-good">● {a.name}</span>)}
-                </div>
-              )}
+              {(() => {
+                // Full active-agent roster for this room: live-socket agents plus
+                // anyone seen in the last 3 min (so a brief socket drop doesn't
+                // blank them). Falls back to the live-online list.
+                const roster = presence.active?.length ? presence.active : presence.online.map((o) => ({ ...o, live: true }));
+                if (!roster.length) return null;
+                return (
+                  <div className="mt-2 border-t border-line pt-2">
+                    <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-muted">
+                      <span>Agents active</span>
+                      <span>{presence.count} online · {roster.length} active{presence.totalAgents != null ? ` · ${presence.totalAgents} total` : ""}</span>
+                    </div>
+                    <div className="max-h-56 space-y-1 overflow-y-auto">
+                      {roster.map((a) => (
+                        <div key={a.agentId} className="flex items-center gap-2 text-xs">
+                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${a.live ? "bg-good" : "bg-warn"}`} />
+                          <span className="shrink-0 font-semibold">{a.name}</span>
+                          {a.unitLabel && <span className="min-w-0 truncate text-muted">{a.unitLabel}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

@@ -43,19 +43,37 @@ app.prepare().then(() => {
     const s = (socket.data as { session: Session }).session;
 
     if (s.kind === "user") {
-      socket.join("dashboard");
-      socket.emit("presence:update", { online: [], count: 0 });
-      broadcastPresence();
+      // Which election's room is this staff viewing? Pinned staff → their own;
+      // super-admins (unpinned) → the tenant slug passed in the socket handshake.
+      let dashElection = s.electionId || null;
+      if (!dashElection) {
+        const slug = (socket.handshake.auth?.tenant as string) || undefined;
+        if (slug) { const t = await db.tenant.findUnique({ where: { slug: slug.toLowerCase() } }).catch(() => null); dashElection = t?.electionId || null; }
+      }
+      if (dashElection) {
+        socket.join(`dashboard:${dashElection}`);
+        broadcastPresence(dashElection);
+      }
       return;
     }
 
     // Agent
     const agentId = s.sub;
+    const electionId = s.electionId || null;
     socket.join(`agent:${agentId}`);
-    if (s.electionId) socket.join(`election:${s.electionId}`);
-    markOnline({ agentId, name: s.name, unitId: s.unitId, since: Date.now() });
+    if (electionId) socket.join(`election:${electionId}`);
+    // Enrich presence with the agent's polling-unit label so the room roster can
+    // show WHERE each online agent is.
+    let unitLabel: string | null = null;
+    if (s.unitId) {
+      const u = await db.pollingUnit.findUnique({ where: { id: s.unitId }, include: { ward: true, lga: true } }).catch(() => null);
+      if (u) unitLabel = `${u.name} · ${u.ward.name} · ${u.lga.name}`;
+    }
+    if (electionId) {
+      markOnline({ agentId, name: s.name, electionId, unitId: s.unitId, unitLabel, since: Date.now() });
+      broadcastPresence(electionId);
+    }
     db.agent.update({ where: { id: agentId }, data: { lastSeenAt: new Date() } }).catch(() => {});
-    broadcastPresence();
 
     // Flush any instructions that were queued while the agent was offline.
     try {
@@ -81,7 +99,7 @@ app.prepare().then(() => {
         const r = await db.instructionReceipt.update({
           where: { id: receiptId }, data: { status: "DELIVERED", deliveredAt: new Date() },
         });
-        emitDashboard("receipt:update", { receiptId, instructionId: r.instructionId, agentId, status: "DELIVERED" });
+        if (electionId) emitDashboard(electionId, "receipt:update", { receiptId, instructionId: r.instructionId, agentId, status: "DELIVERED" });
       } catch {}
     });
 
@@ -90,20 +108,20 @@ app.prepare().then(() => {
         const r = await db.instructionReceipt.update({
           where: { id: receiptId }, data: { status: "READ", readAt: new Date(), ackedAt: new Date() },
         });
-        emitDashboard("receipt:update", { receiptId, instructionId: r.instructionId, agentId, status: "READ" });
+        if (electionId) emitDashboard(electionId, "receipt:update", { receiptId, instructionId: r.instructionId, agentId, status: "READ" });
       } catch {}
     });
 
     socket.on("disconnect", () => {
       markOffline(agentId);
       db.agent.update({ where: { id: agentId }, data: { lastSeenAt: new Date() } }).catch(() => {});
-      broadcastPresence();
+      if (electionId) broadcastPresence(electionId);
     });
   });
 
-  // Bridge the existing in-process event bus (POST routes publish to it) to the
-  // dashboard room, so the live wall works over sockets with zero route changes.
-  subscribe((evt) => io.to("dashboard").emit("live", evt));
+  // Bridge the in-process event bus (POST routes publish to it) to that
+  // election's dashboard room — never a global broadcast (tenant isolation).
+  subscribe((evt) => { if (evt.electionId) io.to(`dashboard:${evt.electionId}`).emit("live", evt); });
 
   // Seed the AI knowledge base (Electoral Act + summaries) on first boot.
   ensureKnowledgeSeeded()
