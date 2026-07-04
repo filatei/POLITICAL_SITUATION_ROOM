@@ -12,15 +12,17 @@ export async function GET(req: NextRequest) {
   const election = await scopedElection();
   if (!election) return NextResponse.json({ error: "No election." }, { status: 404 });
 
-  const candidates = await db.candidate.findMany({ where: { electionId: election.id }, include: { party: true } });
+  // Tally is party-based: every party on the ballot shows from the start (at 0),
+  // and totals grow only from ACCEPTED (verified) scores.
+  const parties = await db.party.findMany({ where: { electionId: election.id } });
   const subs = await db.submission.findMany({
     where: { electionId: election.id, type: "SCORE" },
-    include: { scores: true },
+    include: { scores: { include: { candidate: { include: { party: true } } } } },
   });
 
   const zero = () => ({ verified: 0, declared: 0, perceived: 0 });
-  const byCand: Record<string, ReturnType<typeof zero>> = {};
-  for (const c of candidates) byCand[c.id] = zero();
+  const byParty: Record<string, ReturnType<typeof zero>> = {};
+  for (const p of parties) byParty[p.code] = zero();
 
   const reportedUnits = new Set<string>();
   const verifiedUnits = new Set<string>();
@@ -36,7 +38,10 @@ export async function GET(req: NextRequest) {
       rejected += sub.rejectedBallots || 0;
     }
     for (const sc of sub.scores) {
-      const b = byCand[sc.candidateId];
+      const code = sc.candidate?.party?.code;
+      let b = code ? byParty[code] : undefined;
+      // a score for a party not in the current ballot list still counts
+      if (!b && code) { b = zero(); byParty[code] = b; }
       if (!b) continue;
       if (isVerified) b.verified += sc.votes;
       if (sub.confidence === "DECLARED") b.declared += sc.votes;
@@ -45,12 +50,15 @@ export async function GET(req: NextRequest) {
   }
 
   const totalUnits = await db.pollingUnit.count();
-  const leaderboard = candidates
-    .map((c) => ({
-      candidateId: c.id, name: c.name, party: c.party.code, color: c.party.color,
-      ...byCand[c.id],
+  const colorByCode: Record<string, string> = {};
+  const nameByCode: Record<string, string> = {};
+  for (const p of parties) { colorByCode[p.code] = p.color; nameByCode[p.code] = p.name; }
+  const leaderboard = Object.keys(byParty)
+    .map((code) => ({
+      candidateId: code, name: nameByCode[code] || code, party: code, color: colorByCode[code] || "#888888",
+      ...byParty[code],
     }))
-    .sort((a, b) => b.verified - a.verified || b.declared - a.declared);
+    .sort((a, b) => b.verified - a.verified || b.declared - a.declared || a.party.localeCompare(b.party));
 
   return NextResponse.json({
     leaderboard,
