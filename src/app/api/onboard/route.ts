@@ -5,6 +5,7 @@ import { uniqueSlug, slugify, SUPER_ADMINS } from "@/lib/tenant";
 import { planFor } from "@/app/api/public/scope/route";
 import { sendMail } from "@/lib/mailer";
 import { seedParties } from "@/lib/parties";
+import { rateLimit, clientIp } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -19,19 +20,12 @@ const schema = z.object({
   scopeConstituencyId: z.string().optional(),
 });
 
-let hits: number[] = [];
-function limited() {
-  const now = Date.now();
-  hits = hits.filter((t) => now - t < 3600_000);
-  if (hits.length >= 30) return true; // 30 new tenants/hour, platform-wide
-  hits.push(now);
-  return false;
-}
-
-// Public onboarding: create a tenant (= one election situation room) with 10 free
-// seats. The creator's email becomes the tenant admin (plus platform super-admins).
+// Public onboarding: create a tenant (= one election situation room). The
+// creator's email becomes the tenant admin (plus platform super-admins).
 export async function POST(req: NextRequest) {
-  if (limited()) return NextResponse.json({ error: "Too many sign-ups right now — try again shortly." }, { status: 429 });
+  // Per-IP (5/hour) + a platform-wide safety cap (30/hour).
+  if (!rateLimit(`onboard:${clientIp(req)}`, 5, 3600_000) || !rateLimit("onboard:_global", 30, 3600_000))
+    return NextResponse.json({ error: "Too many sign-ups right now — try again shortly." }, { status: 429 });
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const b = parsed.data;

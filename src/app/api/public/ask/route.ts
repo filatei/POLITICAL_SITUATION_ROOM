@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicAnswer, aiEnabled } from "@/lib/ai";
 import { retrieveKnowledge } from "@/lib/knowledge";
+import { rateLimit, clientIp } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -20,18 +21,11 @@ the same; only the constituency, candidates and win-rule change.
 Live results and field data are only visible to signed-in staff inside the situation room.
 `.trim();
 
-let hits: { t: number }[] = [];
-function rateLimited(): boolean {
-  const now = Date.now();
-  hits = hits.filter((h) => now - h.t < 60_000);
-  if (hits.length >= 40) return true; // global soft cap: 40 public questions/min
-  hits.push({ t: now });
-  return false;
-}
-
 export async function POST(req: NextRequest) {
   if (!aiEnabled) return NextResponse.json({ answer: "AI is not configured yet." });
-  if (rateLimited()) return NextResponse.json({ answer: "The assistant is busy right now — please try again in a moment." });
+  // Per-IP (10/min) + a global soft cap (40/min) to bound AI cost.
+  if (!rateLimit(`ask:${clientIp(req)}`, 10, 60_000) || !rateLimit("ask:_global", 40, 60_000))
+    return NextResponse.json({ answer: "The assistant is busy right now — please try again in a moment." });
 
   const { question, history } = await req.json();
   const q = String(question || "").slice(0, 800).trim();

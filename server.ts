@@ -27,7 +27,19 @@ function cookieToken(cookie?: string): string | undefined {
 
 app.prepare().then(() => {
   const server = createServer((req, res) => handle(req, res));
-  const io = new IOServer(server, { path: "/socket.io", cors: { origin: true, credentials: true } });
+  // Lock Socket.IO CORS to known origins (APP_URL + localhost for dev) instead of
+  // reflecting any origin with credentials.
+  const allowed = new Set(
+    [process.env.APP_URL, "http://localhost:3200", "http://localhost:3000"]
+      .filter(Boolean).map((o) => (o as string).replace(/\/+$/, "")),
+  );
+  const io = new IOServer(server, {
+    path: "/socket.io",
+    cors: {
+      credentials: true,
+      origin: (origin, cb) => cb(null, !origin || allowed.size === 0 || allowed.has(origin.replace(/\/+$/, ""))),
+    },
+  });
   setIO(io);
 
   // Authenticate every socket with the same JWT (auth.token or cookie).

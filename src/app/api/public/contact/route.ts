@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendMail, mailEnabled, CONTACT_TO } from "@/lib/mailer";
+import { rateLimit, clientIp } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
-let hits: number[] = [];
-function limited(): boolean {
-  const now = Date.now();
-  hits = hits.filter((t) => now - t < 60_000);
-  if (hits.length >= 20) return true;
-  hits.push(now);
-  return false;
-}
-
 export async function POST(req: NextRequest) {
-  if (limited()) return NextResponse.json({ error: "Too many messages — try again shortly." }, { status: 429 });
+  // 5 messages / 10 min per IP + a global cap.
+  if (!rateLimit(`contact:${clientIp(req)}`, 5, 600_000) || !rateLimit("contact:_global", 60, 60_000))
+    return NextResponse.json({ error: "Too many messages — try again shortly." }, { status: 429 });
   const { name, email, message } = await req.json();
   const n = String(name || "").trim().slice(0, 120);
   const e = String(email || "").trim().slice(0, 160);
