@@ -1,4 +1,15 @@
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+
+// The tenant the current request is scoped to (via the psr_tenant cookie set on
+// /{slug}/room|admin). Null outside a tenant context.
+export async function scopedTenant() {
+  try {
+    const slug = cookies().get("psr_tenant")?.value;
+    if (slug) return await db.tenant.findUnique({ where: { slug: slug.toLowerCase() } });
+  } catch { /* cookies() unavailable here */ }
+  return null;
+}
 
 // Platform owners who can administer ANY tenant. Extendable via SUPER_ADMINS env
 // (comma-separated), merged with the fixed defaults.
