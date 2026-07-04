@@ -63,7 +63,7 @@ export default async function Home() {
     description:
       "Independent, real-time election situation room for Nigeria: verified polling-unit results, incident reporting and field monitoring for parties, campaigns and observer groups.",
     url: SITE_URL,
-    offers: { "@type": "Offer", price: "0", priceCurrency: "NGN", description: "First 10 agent seats free per election" },
+    offers: { "@type": "Offer", price: "0", priceCurrency: "NGN", description: "Free tier: 20 agent codes per LGA in your election's area" },
     areaServed: { "@type": "Country", name: "Nigeria" },
   };
   return (
@@ -100,7 +100,7 @@ export default async function Home() {
       <section id="create" className="mx-auto max-w-3xl px-5 pb-16">
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Launch your own situation room</h2>
-          <p className="mt-2 text-muted">Set up a branded monitoring room for any election in minutes. Start free with 10 agent seats — no card required.</p>
+          <p className="mt-2 text-muted">Set up a branded monitoring room for any election in minutes. Free tier includes 20 agent codes per LGA in your area — no card required.</p>
         </div>
         <Onboard />
       </section>
@@ -194,7 +194,7 @@ export default async function Home() {
               { q: `How do field agents report?`, a: `Through an offline-first mobile web app (PWA). They sign in with an admin-issued invite code / QR link or a pre-authorised Google account, then send scores, messages, incidents and photos — queued and synced even on poor networks, with GPS.` },
               { q: `Which elections does it support?`, a: `Any Nigerian election — Presidential, Governorship, Senatorial, House of Reps, State Assembly, LG Chairman and Councillor. The polling structure (State → LGA → Ward → Unit) is the same; only the constituency, candidates and win-rule change.` },
               { q: `Is our data private?`, a: `Yes. Live results, agent reports and analytics are visible only to your signed-in staff inside the situation room — never exposed publicly.` },
-              { q: `What does it cost?`, a: `The first 10 agent seats are free to trial. Extra seats are ₦10,000 each, one-off per election. Use the in-app calculator (units × agents per unit) to size your plan, and pay by Paystack or Squad.` },
+              { q: `What does it cost?`, a: `The free tier gives you 20 agent codes per LGA in your election's area — enough to cover a real field operation at no cost. Need more? Extra codes are ₦10,000 each, one-off per election, via Paystack or Squad.` },
               { q: `Can we use our own brand and domain?`, a: `Yes — it's white-label. Set your name, logo, accent colour, candidates and constituency; run it on your own domain. Contact us to set up a tenancy.` },
             ].map((f) => (
               <details key={f.q} className="group bg-surface/40 open:bg-white/[0.03]">

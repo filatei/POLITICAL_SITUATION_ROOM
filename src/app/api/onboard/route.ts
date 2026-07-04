@@ -70,7 +70,16 @@ export async function POST(req: NextRequest) {
       adminEmails: [...new Set([email, ...SUPER_ADMINS])],
     },
   });
-  await db.subscription.create({ data: { electionId: election.id } }); // 10 free seats
+  // Free tier = 20 agent codes per LGA in this election's scope. A constituency
+  // contest counts its member LGAs; a state contest counts the state's LGAs; a
+  // national contest counts all 774.
+  const lgaCount = scopeConstituencyId
+    ? await db.constituencyLga.count({ where: { constituencyId: scopeConstituencyId } })
+    : scopeStateId
+      ? await db.lga.count({ where: { stateId: scopeStateId } })
+      : await db.lga.count();
+  const freeSeats = 20 * Math.max(1, lgaCount);
+  await db.subscription.create({ data: { electionId: election.id, freeSeats } });
   await seedParties(db, election.id); // standard INEC ballot; admin trims/edits
   await db.auditLog.create({ data: { actorType: "public", action: "tenant:create", entity: "Tenant", entityId: tenant.id, meta: { slug, email } } });
 
@@ -87,7 +96,7 @@ export async function POST(req: NextRequest) {
       `Admin console (keep this private): ${adminUrl}`,
       `Situation room (share with your team): ${roomUrl}`,
       ``,
-      `Sign in to the admin console with this email address (${email}) to add candidates, generate agent invite codes and manage your room. You start with 10 free agent seats.`,
+      `Sign in to the admin console with this email address (${email}) to add candidates, generate agent invite codes and manage your room. You start with ${freeSeats.toLocaleString()} free agent codes (20 per LGA across your area).`,
     ].join("\n"),
   }).catch(() => { /* non-blocking: links are also shown on-screen */ });
 

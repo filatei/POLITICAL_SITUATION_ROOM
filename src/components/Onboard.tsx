@@ -171,7 +171,7 @@ export default function Onboard() {
           <button className="btn-ghost" onClick={() => shareLinks(shareText)}>Share links</button>
           <a className="btn-ghost" target="_blank" rel="noreferrer" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}>WhatsApp</a>
         </div>
-        <p className="mt-3 text-xs text-muted">You have 10 free agent seats to start. Sign in to your admin with the email you provided to add candidates, generate agent codes and buy more seats. Keep the admin link private.</p>
+        <p className="mt-3 text-xs text-muted">Your free tier includes 20 agent codes per LGA in your area. Sign in to your admin with the email you provided to add candidates, generate agent codes and buy more if needed. Keep the admin link private.</p>
       </div>
     );
   }
@@ -245,9 +245,9 @@ export default function Onboard() {
           <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="080…" /></div>
         </div>
         <button className="btn-primary w-full" disabled={busy || name.trim().length < 3 || !email.trim() || !scopeReady || slugInfo?.available === false} onClick={submit}>
-          {busy ? "Creating…" : "Create my situation room (10 seats free)"}
+          {busy ? "Creating…" : "Create my situation room (20 free codes / LGA)"}
         </button>
-        <p className="text-center text-[11px] text-muted">Free to start with 10 agent seats. Add more seats (₦10,000 each) any time from your admin.</p>
+        <p className="text-center text-[11px] text-muted">Free: 20 agent codes per LGA in your area. Add more (₦10,000 each) any time from your admin.</p>
       </div>
     </div>
   );
