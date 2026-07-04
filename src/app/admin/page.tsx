@@ -46,7 +46,7 @@ export default function AdminPage() {
   return <Console session={session!} isSuper={isSuper} />;
 }
 
-type AdminTab = "codes" | "geo" | "results" | "ai" | "billing" | "settings";
+type AdminTab = "codes" | "geo" | "results" | "ai" | "billing" | "settings" | "tenants";
 
 function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   const [units, setUnits] = useState<Unit[]>([]);
@@ -149,16 +149,15 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
   }, []);
   const TABS: { key: AdminTab; label: string }[] = [
     { key: "codes", label: "Agents & Codes" },
-    // Geography = the shared, platform-wide INEC warehouse (uploads/harvest).
-    // Only super-admins manage it; tenant admins never see it.
-    ...(isSuper ? [{ key: "geo" as const, label: "Geography" }] : []),
+    // Geography + Tenants = platform-wide, super-admins only.
+    ...(isSuper ? [{ key: "geo" as const, label: "Geography" }, { key: "tenants" as const, label: "Tenants" }] : []),
     { key: "results", label: "Results" },
     { key: "ai", label: "AI & Knowledge" },
     ...(isAdmin ? [{ key: "billing" as const, label: "Billing" }, { key: "settings" as const, label: "Settings" }] : []),
   ];
   const tabTitle: Record<AdminTab, string> = {
     codes: "Agents & access codes", geo: "Geography warehouse", results: "Results & tally",
-    ai: "AI & knowledge base", billing: "Seats & billing", settings: "Branding & staff",
+    ai: "AI & knowledge base", billing: "Seats & billing", settings: "Branding & staff", tenants: "All tenants",
   };
 
   return (
@@ -328,6 +327,8 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
         </section>
       </main>
       )}
+
+      {tab === "tenants" && isSuper && <TenantsPanel />}
 
       {tab === "geo" && isSuper && (
         <div className="space-y-4 p-5">
@@ -1260,5 +1261,56 @@ function BrandingCard({ onFlash }: { onFlash: (s: string) => void }) {
         <span className="rounded px-2 py-1 text-xs font-semibold text-white" style={{ background: /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : "#5b8cff" }}>Accent preview</span>
       </div>
     </section>
+  );
+}
+
+type TenantRow = { slug: string; name: string; contactEmail: string | null; electionName: string; type: string | null; status: string | null; seats: number | null; createdAt: string };
+
+// Super-admin only: every tenant (election room), with links to open each one
+// and experience its branded room / admin.
+function TenantsPanel() {
+  const [rows, setRows] = useState<TenantRow[]>([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api("/api/admin/tenants").then((r) => (r.ok ? r.json() : { tenants: [] })).then((j) => { setRows(j.tenants || []); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+  const filtered = q.trim() ? rows.filter((t) => (t.name + " " + t.slug + " " + (t.contactEmail || "")).toLowerCase().includes(q.trim().toLowerCase())) : rows;
+  return (
+    <main className="p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted">All tenants</h2>
+          <p className="mt-0.5 text-sm text-muted">{rows.length} election room{rows.length === 1 ? "" : "s"}. Open any one to experience its branded look &amp; feel.</p>
+        </div>
+        <input className="input max-w-xs" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name / slug / email…" />
+      </div>
+      {loading ? <p className="text-sm text-muted">Loading…</p> : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((t) => (
+            <div key={t.slug} className="card p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-bold" title={t.electionName}>{t.electionName}</div>
+                  <div className="tabular text-[11px] text-accent">/{t.slug}</div>
+                </div>
+                {t.status && <span className="pill shrink-0 bg-ink/10 text-muted">{t.status}</span>}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+                {t.type && <span>{t.type.replace(/_/g, " ")}</span>}
+                {t.seats != null && <span>· {t.seats} seats</span>}
+                {t.contactEmail && <span>· {t.contactEmail}</span>}
+                <span>· {new Date(t.createdAt).toLocaleDateString()}</span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a href={`/${t.slug}/room`} className="btn-primary px-3 py-1.5 text-xs">Open room →</a>
+                <a href={`/${t.slug}/admin`} className="btn-ghost px-3 py-1.5 text-xs">Admin</a>
+              </div>
+            </div>
+          ))}
+          {!filtered.length && <p className="text-sm text-muted">No tenants match “{q}”.</p>}
+        </div>
+      )}
+    </main>
   );
 }

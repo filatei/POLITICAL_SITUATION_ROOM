@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 
 // Platform owners who can administer ANY tenant. Extendable via SUPER_ADMINS env
 // (comma-separated), merged with the fixed defaults.
-const DEFAULT_SUPER = ["filatei@torama.money", "filatei@gmail.com", "filatei@torama.ng", "filatei@gtsng.com"];
+const DEFAULT_SUPER = ["filatei@torama.money", "filatei@gmail.com"];
 export const SUPER_ADMINS = [
   ...DEFAULT_SUPER,
   ...(process.env.SUPER_ADMINS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
