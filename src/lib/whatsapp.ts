@@ -27,17 +27,38 @@ const OTP_TEMPLATE = process.env.WHATSAPP_OTP_TEMPLATE || "";
 const OTP_LANG = process.env.WHATSAPP_OTP_LANG || "en";
 export const whatsappOtpEnabled = !!(PHONE_ID && TOKEN && OTP_TEMPLATE);
 
-// Send a login/verification code via the WhatsApp Authentication template.
-// Auth templates vary: some need the copy-code button component echoed with the
-// code, others accept body-only. Try with the button, then fall back to body-only.
+// Send a login/verification code over WhatsApp.
+//
+// IMPORTANT: Authentication templates (copy-code / one-tap button) are frequently
+// ACCEPTED by Graph (200 + message id) but SILENTLY UNDELIVERED when the button
+// component doesn't match the template's button type. Our Utility template
+// (WHATSAPP_TEMPLATE_NAME, a plain {{1}} body) is proven to deliver — it's the
+// same rail agent codes go out on. So we send OTP through the Utility rail first
+// (reliable), and only fall back to the Authentication template if utility isn't
+// configured. The full code is also sent by SMS, so a plain body is fine.
 export async function sendWhatsAppOtp(phone: string, code: string): Promise<{ ok: boolean; error?: string }> {
-  const to = (phone || "").replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/^0/, "234");
-  if (!whatsappOtpEnabled) return { ok: false, error: "WhatsApp OTP not configured (WHATSAPP_OTP_TEMPLATE missing)." };
-  if (to.length < 11) return { ok: false, error: "Invalid phone number." };
+  const to = toWaNumber(phone);
+  if (!to) return { ok: false, error: "Invalid phone number." };
 
-  const send = async (withButton: boolean) => {
+  const message = `${code} is your PSR admin login code. Valid 5 minutes. Do not share it.`;
+
+  // Preferred: proven Utility template (same rail as agent codes → delivers).
+  if (whatsappEnabled) {
+    try { await sendOne(to, message); return { ok: true }; }
+    catch (e: any) {
+      const utilErr = String(e?.message || e).slice(0, 240);
+      if (!whatsappOtpEnabled) return { ok: false, error: utilErr };
+    }
+  }
+
+  if (!whatsappOtpEnabled) return { ok: false, error: "WhatsApp OTP not configured." };
+
+  // Fallback: Authentication template. Try the copy-code button (correct payload
+  // for a COPY_CODE button), then one-tap url, then body-only.
+  const send = async (button: "copy_code" | "url" | "none") => {
     const components: any[] = [{ type: "body", parameters: [{ type: "text", text: code }] }];
-    if (withButton) components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] });
+    if (button === "copy_code") components.push({ type: "button", sub_type: "copy_code", index: 0, parameters: [{ type: "coupon_code", coupon_code: code }] });
+    else if (button === "url") components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] });
     const res = await fetch(`https://graph.facebook.com/${API_VER}/${PHONE_ID}/messages`, {
       method: "POST",
       headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
@@ -47,8 +68,9 @@ export async function sendWhatsAppOtp(phone: string, code: string): Promise<{ ok
   };
 
   try {
-    let r = await send(true);
-    if (!r.ok) r = await send(false); // retry body-only
+    let r = await send("copy_code");
+    if (!r.ok) r = await send("url");
+    if (!r.ok) r = await send("none");
     return r.ok ? { ok: true } : { ok: false, error: r.text };
   } catch (e: any) { return { ok: false, error: String(e?.message || e).slice(0, 240) }; }
 }
