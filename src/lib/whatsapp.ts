@@ -32,8 +32,8 @@ export function toWaNumber(phone: string | null | undefined): string | null {
 
 export type WaResult = { requested: number; sent: number; skipped: number; failed: number; errors: string[] };
 
-async function sendOne(to: string, message: string): Promise<void> {
-  const res = await fetch(`https://graph.facebook.com/${API_VER}/${PHONE_ID}/messages`, {
+async function post(to: string, message: string, withBody: boolean) {
+  return fetch(`https://graph.facebook.com/${API_VER}/${PHONE_ID}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -43,11 +43,26 @@ async function sendOne(to: string, message: string): Promise<void> {
       template: {
         name: TEMPLATE,
         language: { code: LANG },
-        components: [{ type: "body", parameters: [{ type: "text", text: message }] }],
+        // Templates with a {{1}} body variable need the parameter; templates with
+        // no variables (e.g. hello_world) reject it — we retry without on mismatch.
+        ...(withBody ? { components: [{ type: "body", parameters: [{ type: "text", text: message }] }] } : {}),
       },
     }),
   });
-  if (!res.ok) throw new Error(`WhatsApp ${res.status}: ${(await res.text()).slice(0, 220)}`);
+}
+
+async function sendOne(to: string, message: string): Promise<void> {
+  let res = await post(to, message, true);
+  if (!res.ok) {
+    const txt = await res.text();
+    // 132000 / "number of parameters" ⇒ template has no variables → retry bare.
+    if (/132000|number of parameters|does not match|no variable/i.test(txt)) {
+      res = await post(to, message, false);
+      if (!res.ok) throw new Error(`WhatsApp ${res.status}: ${(await res.text()).slice(0, 220)}`);
+      return;
+    }
+    throw new Error(`WhatsApp ${res.status}: ${txt.slice(0, 220)}`);
+  }
 }
 
 // Send the same text to many numbers via the utility template. WhatsApp has no
