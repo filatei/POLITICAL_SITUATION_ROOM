@@ -52,6 +52,7 @@ const nf = new Intl.NumberFormat();
 export default function Dashboard({ session }: { session: Session }) {
   const brand = useBrand();
   const [election, setElection] = useState<any>(null);
+  const [mismatch, setMismatch] = useState<{ requested: string; yours: string } | null>(null);
   const [feed, setFeed] = useState<Item[]>([]);
   const [tally, setTally] = useState<Tally | null>(null);
   const [big, setBig] = useState(false);
@@ -129,7 +130,12 @@ export default function Dashboard({ session }: { session: Session }) {
   }
 
   useEffect(() => {
-    api("/api/bootstrap").then(async (r) => r.ok && setElection((await r.json()).election));
+    api("/api/bootstrap").then(async (r) => {
+      if (!r.ok) return;
+      const j = await r.json();
+      setElection(j.election);
+      setMismatch(j.tenantMismatch || null);
+    });
     loadFeed(); loadTally(); loadInstr(); loadPresence();
 
     // Live over Socket.IO (bridged from the server event bus).
@@ -283,6 +289,18 @@ export default function Dashboard({ session }: { session: Session }) {
               {t === "tally" ? "Tally" : t === "scores" ? "Scores" : "Incidents"}
             </button>
           ))}
+        </div>
+      )}
+
+      {mismatch && (
+        <div className="mx-4 mt-4 rounded-xl border border-warn/40 bg-warn/10 p-4 text-sm">
+          <div className="font-semibold text-ink">You&apos;re viewing the wrong room</div>
+          <p className="mt-1 text-muted">
+            This link is for <strong className="text-ink">{mismatch.requested}</strong>, but your account is bound to <strong className="text-ink">{mismatch.yours}</strong>. Pinned staff always see their own election — so this room is showing <strong className="text-ink">{mismatch.yours}</strong>, not the election in the URL.
+          </p>
+          <button className="btn-ghost mt-3 text-xs" onClick={async () => { await logout(); location.reload(); }}>
+            Sign out to switch account →
+          </button>
         </div>
       )}
 

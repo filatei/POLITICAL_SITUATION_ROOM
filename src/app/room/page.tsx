@@ -14,8 +14,18 @@ export default function RoomPage() {
 
   async function check() {
     const r = await api("/api/auth/me");
-    if (r.ok) { const j = await r.json(); setSession(j.session); setState("in"); }
-    else setState("out");
+    if (r.ok) {
+      const j = await r.json();
+      // The situation room is staff-only. Field agents get bounced to their own
+      // reporting page (under their tenant slug) instead of seeing the full room.
+      if (j.session?.kind === "agent") {
+        const parts = window.location.pathname.split("/").filter(Boolean);
+        const slug = parts[1] === "room" ? parts[0] : "";
+        window.location.replace(slug ? `/${slug}/agent` : "/");
+        return;
+      }
+      setSession(j.session); setState("in");
+    } else setState("out");
   }
   useEffect(() => {
     if (bareRoot) { window.location.replace("/"); return; }
