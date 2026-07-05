@@ -49,8 +49,12 @@ async function sendChunk(numbers: string[], message: string): Promise<void> {
     return;
   }
   if (PROVIDER === "africastalking") {
+    // Sandbox uses a DIFFERENT host + the reserved username "sandbox"; sandbox
+    // messages only reach AT's web simulator, never real phones.
+    const sandbox = AT_USERNAME === "sandbox";
+    const host = sandbox ? "https://api.sandbox.africastalking.com" : "https://api.africastalking.com";
     const body = new URLSearchParams({ username: AT_USERNAME, to: numbers.map((n) => "+" + n).join(","), message, ...(SENDER ? { from: SENDER } : {}) });
-    const res = await fetch("https://api.africastalking.com/version1/messaging", {
+    const res = await fetch(`${host}/version1/messaging`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json", apiKey: API_KEY },
       body,
