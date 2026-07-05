@@ -1,19 +1,24 @@
 // SMS delivery — provider-agnostic, Nigeria-first.
 //
-// Default provider is Termii (cheap NG rates, one API key, native bulk endpoint).
-// Africa's Talking and Twilio are also supported. Pick with SMS_PROVIDER.
+// RECOMMENDED: Africa's Talking — transparent pay-as-you-go (no prepaid wallet
+// surprises), a FREE sandbox for testing, and it works WITHOUT a pre-registered
+// sender ID (uses a shared shortcode). Twilio is supported as a robust global
+// fallback. Termii is still selectable but NOT recommended (opaque wallet
+// charges even before sender-ID approval).
 //
-//   SMS_PROVIDER   termii | africastalking | twilio | log   (default: log)
-//   SMS_API_KEY    Termii / Africa's Talking API key (falls back to TERMII_API_KEY)
-//   SMS_SENDER     sender ID / from                          (default: "PSR")
-//   SMS_USERNAME   Africa's Talking username
+//   SMS_PROVIDER   africastalking | twilio | termii | log   (default: log)
+//   SMS_API_KEY    provider API key (Africa's Talking / Termii)
+//   SMS_SENDER     OPTIONAL sender ID. Leave UNSET to use the provider's shared
+//                  shortcode — safest, needs no approval. Only set once your
+//                  alphanumeric sender ID is approved.
+//   SMS_USERNAME   Africa's Talking username ("sandbox" for free testing)
 //   TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM     (Twilio only)
 //
 // "log" just prints to server logs so the app is usable without an SMS account.
 
 const PROVIDER = (process.env.SMS_PROVIDER || "log").toLowerCase();
 const API_KEY = process.env.SMS_API_KEY || process.env.TERMII_API_KEY || "";
-const SENDER = process.env.SMS_SENDER || "PSR";
+const SENDER = process.env.SMS_SENDER || ""; // unset = provider's shared shortcode (no approval needed)
 const AT_USERNAME = process.env.SMS_USERNAME || "";
 
 // True when a real provider is configured (so the UI can warn if not).
@@ -38,7 +43,7 @@ async function sendChunk(numbers: string[], message: string): Promise<void> {
     const res = await fetch("https://api.ng.termii.com/api/sms/send/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: numbers, from: SENDER, sms: message, type: "plain", channel: "generic", api_key: API_KEY }),
+      body: JSON.stringify({ to: numbers, from: SENDER || "N-Alert", sms: message, type: "plain", channel: "generic", api_key: API_KEY }),
     });
     if (!res.ok) throw new Error(`Termii ${res.status}: ${(await res.text()).slice(0, 200)}`);
     return;
