@@ -24,8 +24,13 @@ export async function POST(req: NextRequest) {
 
   const message = `${issued.code} is your PSR admin login code. Valid 5 minutes. Do not share it.`;
   // Deliver on BOTH channels so the admin gets it wherever they look.
-  if (whatsappOtpEnabled) { try { await sendWhatsAppOtp(issued.phone, issued.code); } catch { /* ignore */ } }
+  let waResult: { ok: boolean; error?: string } = { ok: false, error: "whatsapp-otp-disabled" };
+  if (whatsappOtpEnabled) { try { waResult = await sendWhatsAppOtp(issued.phone, issued.code); } catch (e: any) { waResult = { ok: false, error: String(e?.message || e) }; } }
   if (smsEnabled) { try { await sendSms(issued.phone, message); } catch { /* ignore */ } }
 
+  // Diagnostics only when explicitly enabled — never leaks in normal operation.
+  if (process.env.OTP_DEBUG === "true") {
+    return NextResponse.json({ ok: true, debug: { whatsappOtpEnabled, whatsapp: waResult } });
+  }
   return generic;
 }

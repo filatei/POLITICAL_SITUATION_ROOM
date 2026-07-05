@@ -28,26 +28,29 @@ const OTP_LANG = process.env.WHATSAPP_OTP_LANG || "en";
 export const whatsappOtpEnabled = !!(PHONE_ID && TOKEN && OTP_TEMPLATE);
 
 // Send a login/verification code via the WhatsApp Authentication template.
-export async function sendWhatsAppOtp(phone: string, code: string): Promise<boolean> {
+// Auth templates vary: some need the copy-code button component echoed with the
+// code, others accept body-only. Try with the button, then fall back to body-only.
+export async function sendWhatsAppOtp(phone: string, code: string): Promise<{ ok: boolean; error?: string }> {
   const to = (phone || "").replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/^0/, "234");
-  if (!whatsappOtpEnabled || to.length < 11) return false;
-  try {
+  if (!whatsappOtpEnabled) return { ok: false, error: "WhatsApp OTP not configured (WHATSAPP_OTP_TEMPLATE missing)." };
+  if (to.length < 11) return { ok: false, error: "Invalid phone number." };
+
+  const send = async (withButton: boolean) => {
+    const components: any[] = [{ type: "body", parameters: [{ type: "text", text: code }] }];
+    if (withButton) components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] });
     const res = await fetch(`https://graph.facebook.com/${API_VER}/${PHONE_ID}/messages`, {
       method: "POST",
       headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messaging_product: "whatsapp", to, type: "template",
-        template: {
-          name: OTP_TEMPLATE, language: { code: OTP_LANG },
-          components: [
-            { type: "body", parameters: [{ type: "text", text: code }] },
-            { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
-          ],
-        },
-      }),
+      body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: OTP_TEMPLATE, language: { code: OTP_LANG }, components } }),
     });
-    return res.ok;
-  } catch { return false; }
+    return { ok: res.ok, text: res.ok ? "" : (await res.text()).slice(0, 240) };
+  };
+
+  try {
+    let r = await send(true);
+    if (!r.ok) r = await send(false); // retry body-only
+    return r.ok ? { ok: true } : { ok: false, error: r.text };
+  } catch (e: any) { return { ok: false, error: String(e?.message || e).slice(0, 240) }; }
 }
 
 // WhatsApp wants the number in international format, digits only (no '+').
