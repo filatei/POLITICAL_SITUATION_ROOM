@@ -348,7 +348,14 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Register an agent</h2>
           <div className="space-y-3">
             <div><label className="label">Agent name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></div>
-            <div><label className="label">Phone (optional)</label><input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" autoComplete="tel" inputMode="tel" placeholder="080…" /></div>
+            <div>
+              <label className="label">Phone (optional)</label>
+              <div className="flex items-stretch overflow-hidden rounded-lg border border-line focus-within:ring-1 focus-within:ring-accent/40">
+                <span className="flex shrink-0 items-center gap-1 border-r border-line bg-ink/5 px-3 text-sm text-muted">🇳🇬 +234</span>
+                <input className="input flex-1 border-0 bg-transparent focus:ring-0" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" autoComplete="tel" inputMode="tel" placeholder="803 000 0000" />
+              </div>
+              <p className="mt-1 text-[11px] text-muted">Enter the local number — a leading 0 or +234 is fine, we normalise it.</p>
+            </div>
             <div><label className="label">Google email (optional — lets them sign in with Google)</label><input className="input" value={agentEmail} onChange={(e) => setAgentEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="agent@gmail.com" /></div>
             <div>
               <label className="label">Polling unit {unitId && <span className="text-good">· selected</span>}</label>
