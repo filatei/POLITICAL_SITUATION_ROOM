@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { saveAuth } from "@/lib/session";
-import { tenantFromPath } from "@/lib/tenant-path";
 
 // Google-only sign-in. There is no email/password form — access is granted
 // solely via Google Sign-In, and only to accounts the tenant admin has been
@@ -9,10 +8,6 @@ import { tenantFromPath } from "@/lib/tenant-path";
 export default function RoomLogin({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState("");
   const cid = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-  // WhatsApp-code login is for TENANT admins & the room — only shown under a
-  // tenant slug (/{slug}/admin, /{slug}/room). The super-admin (/admin) uses
-  // Google only.
-  const inTenant = typeof window !== "undefined" && !!tenantFromPath(window.location.pathname).slug;
 
   useEffect(() => {
     if (!cid) return;
@@ -61,13 +56,9 @@ export default function RoomLogin({ onDone }: { onDone: () => void }) {
           <p className="text-center text-sm text-muted">Google Sign-In isn’t configured for this deployment.</p>
         )}
 
-        {inTenant && (
-          <>
-            <div className="flex w-full items-center gap-3 text-[11px] text-muted"><span className="h-px flex-1 bg-line" />OR<span className="h-px flex-1 bg-line" /></div>
-            <WhatsAppLogin onDone={onDone} onError={setErr} />
-            <p className="text-center text-[11px] text-muted">Admins can sign in with a code sent to their WhatsApp number.</p>
-          </>
-        )}
+        <div className="flex w-full items-center gap-3 text-[11px] text-muted"><span className="h-px flex-1 bg-line" />OR<span className="h-px flex-1 bg-line" /></div>
+        <WhatsAppLogin onDone={onDone} onError={setErr} />
+        <p className="text-center text-[11px] text-muted">Admins can sign in with a code sent to their phone (WhatsApp + SMS).</p>
       </div>
     </main>
   );

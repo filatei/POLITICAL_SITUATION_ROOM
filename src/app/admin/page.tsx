@@ -542,6 +542,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
 
       {tab === "settings" && isAdmin && (
         <div className="space-y-4 p-5">
+          <TenantAdmins onFlash={setFlash} />
           <BallotCard onFlash={setFlash} />
           <BrandingCard onFlash={setFlash} />
           <StaffUsers onFlash={setFlash} />
@@ -749,6 +750,65 @@ function SmsBroadcast({ onFlash }: { onFlash: (s: string) => void }) {
       <button className="btn-primary mt-2 w-full" disabled={busy || !msg.trim() || !(info?.withPhone) || !canSend} onClick={send}>
         {busy ? "Sending…" : `Send ${isWa ? "WhatsApp" : "SMS"} to all agents with a phone (${info?.withPhone ?? 0})`}
       </button>
+    </section>
+  );
+}
+
+// Manage who can admin-login to this tenant: the creator's contact email/phone
+// (fixed) plus extra emails (Google) and phones (WhatsApp/SMS code).
+function TenantAdmins({ onFlash }: { onFlash: (s: string) => void }) {
+  const [info, setInfo] = useState<{ contactEmail?: string; contactPhone?: string; adminEmails: string[]; adminPhones: string[] } | null>(null);
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() { const r = await api("/api/admin/admin-phones"); if (r.ok) setInfo(await r.json()); }
+  useEffect(() => { load(); }, []);
+
+  async function add(body: any, label: string) {
+    setBusy(true);
+    try {
+      const r = await api("/api/admin/admin-phones", { method: "POST", body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) { await alertDialog({ title: "Couldn't add admin", body: errText(j) }); return; }
+      setEmail(""); setPhone(""); onFlash(`Added ${label}`); load();
+    } finally { setBusy(false); }
+  }
+  async function remove(body: any) {
+    if (!(await confirmDialog({ title: "Remove admin access?", body: `${body.email || body.phone} will no longer be able to sign in as an admin.` }))) return;
+    const r = await api("/api/admin/admin-phones", { method: "DELETE", body: JSON.stringify(body) });
+    if (r.ok) { onFlash("Removed"); load(); }
+  }
+
+  return (
+    <section className="card p-5">
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">Tenant admins</h2>
+      <p className="mb-3 text-[11px] text-muted">Who can sign in to administer this room — by Google email or by a code sent to their phone (WhatsApp + SMS).</p>
+
+      <div className="space-y-1.5 text-sm">
+        {info?.contactEmail && <div className="flex items-center justify-between rounded-lg border border-line bg-white/[0.02] px-3 py-2"><span>📧 {info.contactEmail} <span className="pill ml-1 bg-accent/10 text-accent">owner</span></span></div>}
+        {info?.contactPhone && <div className="flex items-center justify-between rounded-lg border border-line bg-white/[0.02] px-3 py-2"><span>📱 {info.contactPhone} <span className="pill ml-1 bg-accent/10 text-accent">owner</span></span></div>}
+        {(info?.adminEmails || []).map((e) => (
+          <div key={e} className="flex items-center justify-between rounded-lg border border-line px-3 py-2"><span>📧 {e}</span><button className="text-xs text-bad hover:brightness-125" onClick={() => remove({ email: e })}>Remove</button></div>
+        ))}
+        {(info?.adminPhones || []).map((p) => (
+          <div key={p} className="flex items-center justify-between rounded-lg border border-line px-3 py-2"><span>📱 +{p}</span><button className="text-xs text-bad hover:brightness-125" onClick={() => remove({ phone: p })}>Remove</button></div>
+        ))}
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="flex gap-2">
+          <input className="input flex-1" value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="off" inputMode="email" placeholder="admin@email.com" />
+          <button className="btn-ghost shrink-0" disabled={busy || !email.trim()} onClick={() => add({ email: email.trim() }, "admin email")}>Add email</button>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex flex-1 items-stretch overflow-hidden rounded-lg border border-line">
+            <span className="flex shrink-0 items-center gap-1 border-r border-line bg-ink/5 px-2 text-xs text-muted">🇳🇬+234</span>
+            <input className="input flex-1 border-0 bg-transparent focus:ring-0" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="off" placeholder="803 000 0000" />
+          </div>
+          <button className="btn-ghost shrink-0" disabled={busy || !phone.trim()} onClick={() => add({ phone: phone.trim() }, "admin phone")}>Add phone</button>
+        </div>
+      </div>
     </section>
   );
 }
