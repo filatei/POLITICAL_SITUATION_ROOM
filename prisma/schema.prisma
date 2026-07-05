@@ -555,3 +555,15 @@ model InstructionReceipt {
   @@unique([instructionId, agentId])
   @@index([agentId, status])
 }
+
+// Short-lived one-time codes for WhatsApp/SMS admin login (hashed, attempt-capped).
+model LoginOtp {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}

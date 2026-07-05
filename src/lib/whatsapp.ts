@@ -21,6 +21,35 @@ const LANG = process.env.WHATSAPP_TEMPLATE_LANG || "en_US";
 
 export const whatsappEnabled = !!(PHONE_ID && TOKEN && TEMPLATE);
 
+// OTP over WhatsApp uses a separate Authentication template (code + copy-code
+// button), e.g. WHATSAPP_OTP_TEMPLATE=bibipay_otp on the same number.
+const OTP_TEMPLATE = process.env.WHATSAPP_OTP_TEMPLATE || "";
+const OTP_LANG = process.env.WHATSAPP_OTP_LANG || "en";
+export const whatsappOtpEnabled = !!(PHONE_ID && TOKEN && OTP_TEMPLATE);
+
+// Send a login/verification code via the WhatsApp Authentication template.
+export async function sendWhatsAppOtp(phone: string, code: string): Promise<boolean> {
+  const to = (phone || "").replace(/[^\d+]/g, "").replace(/^\+/, "").replace(/^0/, "234");
+  if (!whatsappOtpEnabled || to.length < 11) return false;
+  try {
+    const res = await fetch(`https://graph.facebook.com/${API_VER}/${PHONE_ID}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp", to, type: "template",
+        template: {
+          name: OTP_TEMPLATE, language: { code: OTP_LANG },
+          components: [
+            { type: "body", parameters: [{ type: "text", text: code }] },
+            { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
+          ],
+        },
+      }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 // WhatsApp wants the number in international format, digits only (no '+').
 export function toWaNumber(phone: string | null | undefined): string | null {
   let p = (phone || "").replace(/[^\d+]/g, "");

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { saveAuth } from "@/lib/session";
+import { tenantFromPath } from "@/lib/tenant-path";
 
 // Google-only sign-in. There is no email/password form — access is granted
 // solely via Google Sign-In, and only to accounts the tenant admin has been
@@ -8,6 +9,10 @@ import { saveAuth } from "@/lib/session";
 export default function RoomLogin({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState("");
   const cid = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  // WhatsApp-code login is for TENANT admins & the room — only shown under a
+  // tenant slug (/{slug}/admin, /{slug}/room). The super-admin (/admin) uses
+  // Google only.
+  const inTenant = typeof window !== "undefined" && !!tenantFromPath(window.location.pathname).slug;
 
   useEffect(() => {
     if (!cid) return;
@@ -50,12 +55,70 @@ export default function RoomLogin({ onDone }: { onDone: () => void }) {
         {cid ? (
           <>
             <div id="gbtn" className="flex justify-center" />
-            <p className="text-center text-[11px] text-muted">Access is by Google Sign-In only. Use the email your room was created with, or the one your admin invited.</p>
+            <p className="text-center text-[11px] text-muted">Use the email your room was created with, or the one your admin invited.</p>
           </>
         ) : (
-          <p className="text-center text-sm text-muted">Google Sign-In isn’t configured for this deployment. Set <span className="tabular">NEXT_PUBLIC_GOOGLE_CLIENT_ID</span> and rebuild.</p>
+          <p className="text-center text-sm text-muted">Google Sign-In isn’t configured for this deployment.</p>
+        )}
+
+        {inTenant && (
+          <>
+            <div className="flex w-full items-center gap-3 text-[11px] text-muted"><span className="h-px flex-1 bg-line" />OR<span className="h-px flex-1 bg-line" /></div>
+            <WhatsAppLogin onDone={onDone} onError={setErr} />
+            <p className="text-center text-[11px] text-muted">Admins can sign in with a code sent to their WhatsApp number.</p>
+          </>
         )}
       </div>
     </main>
+  );
+}
+
+// Phone → WhatsApp code → verify → session. For tenant admins & super-admins.
+function WhatsAppLogin({ onDone, onError }: { onDone: () => void; onError: (s: string) => void }) {
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+
+  async function request() {
+    if (!phone.trim() || busy) return;
+    setBusy(true); onError("");
+    try {
+      await fetch("/api/auth/login-otp/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: phone.trim() }) });
+      setStep("code"); setNote("If that number is an admin, a code is on its way via WhatsApp.");
+    } catch { onError("Couldn't request a code. Try again."); }
+    finally { setBusy(false); }
+  }
+  async function verify() {
+    if (code.trim().length < 4 || busy) return;
+    setBusy(true); onError("");
+    try {
+      const r = await fetch("/api/auth/login-otp/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: phone.trim(), code: code.trim() }) });
+      const j = await r.json();
+      if (r.ok) { saveAuth(j.token, j.session); onDone(); }
+      else onError(j.error || "Invalid or expired code.");
+    } catch { onError("Verification failed. Try again."); }
+    finally { setBusy(false); }
+  }
+
+  if (step === "phone") {
+    return (
+      <div className="w-full space-y-2">
+        <div className="flex items-stretch overflow-hidden rounded-lg border border-line focus-within:ring-1 focus-within:ring-accent/40">
+          <span className="flex shrink-0 items-center gap-1 border-r border-line bg-ink/5 px-3 text-sm text-muted">🇳🇬 +234</span>
+          <input className="input flex-1 border-0 bg-transparent focus:ring-0" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="803 000 0000" onKeyDown={(e) => e.key === "Enter" && request()} />
+        </div>
+        <button className="btn-ghost w-full" disabled={busy || !phone.trim()} onClick={request}>{busy ? "Sending…" : "Send WhatsApp code"}</button>
+      </div>
+    );
+  }
+  return (
+    <div className="w-full space-y-2">
+      {note && <p className="text-center text-[11px] text-good">{note}</p>}
+      <input className="input w-full text-center tracking-[0.4em]" value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]*" placeholder="••••••" onKeyDown={(e) => e.key === "Enter" && verify()} />
+      <button className="btn-primary w-full" disabled={busy || code.trim().length < 4} onClick={verify}>{busy ? "Verifying…" : "Sign in"}</button>
+      <button className="w-full text-center text-[11px] text-muted underline" onClick={() => { setStep("phone"); setCode(""); setNote(""); }}>Use a different number</button>
+    </div>
   );
 }

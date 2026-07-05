@@ -4,7 +4,9 @@ import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
 import { inviteCode } from "@/lib/code";
 import { seatStatus } from "@/lib/seats";
-import { sendAgentInvite } from "@/lib/agent-invite";
+import { sendAgentInvite, agentLoginUrl } from "@/lib/agent-invite";
+import { sendBulkSms, smsEnabled } from "@/lib/sms";
+import { sendWhatsAppBulk, whatsappEnabled } from "@/lib/whatsapp";
 
 export const runtime = "nodejs";
 
@@ -66,20 +68,24 @@ export async function POST(req: NextRequest) {
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:create", entity: "Agent", entityId: agent.id, meta: { unit: pu.name } } });
 
   const unitLabel = `${pu.name} · ${pu.ward.name} · ${pu.lga.name}`;
-  // Email the new agent their code + sign-in link (non-blocking; no-op without email).
-  let emailed = false;
-  if (cleanEmail) {
-    const origin = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
-    const tenant = await db.tenant.findUnique({ where: { electionId: election.id }, select: { slug: true } });
-    if (tenant) {
-      const r = await sendAgentInvite({
-        name, email: cleanEmail, code, unitLabel,
-        electionName: election.name, slug: tenant.slug, origin,
-      });
-      emailed = r.ok;
+  // Auto-deliver the agent's code + sign-in link on every available channel:
+  // email (if given), and WhatsApp + SMS (if a phone was given). All non-blocking.
+  const origin = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
+  const tenant = await db.tenant.findUnique({ where: { electionId: election.id }, select: { slug: true } });
+  const delivered = { emailed: false, whatsapp: false, sms: false };
+  if (tenant) {
+    if (cleanEmail) {
+      const r = await sendAgentInvite({ name, email: cleanEmail, code, unitLabel, electionName: election.name, slug: tenant.slug, origin });
+      delivered.emailed = r.ok;
+    }
+    if (agent.phone) {
+      const link = agentLoginUrl({ origin, slug: tenant.slug, code });
+      const message = `${name}, you're a field agent for ${election.name}. Code: ${code}. Unit: ${unitLabel}. Sign in: ${link} — keep your code private.`;
+      if (whatsappEnabled) { const w = await sendWhatsAppBulk([agent.phone], message); delivered.whatsapp = w.sent > 0; }
+      if (smsEnabled) { const t = await sendBulkSms([agent.phone], message); delivered.sms = t.sent > 0; }
     }
   }
-  return NextResponse.json({ ok: true, emailed, agent: { id: agent.id, name: agent.name, inviteCode: agent.inviteCode, unitLabel } });
+  return NextResponse.json({ ok: true, ...delivered, emailed: delivered.emailed, agent: { id: agent.id, name: agent.name, inviteCode: agent.inviteCode, unitLabel } });
 }
 
 // Record who a code is being sent to (recipient name / phone / Google email).
