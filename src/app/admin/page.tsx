@@ -673,7 +673,7 @@ function SmsBroadcast({ onFlash }: { onFlash: (s: string) => void }) {
   const [info, setInfo] = useState<{ smsEnabled: boolean; total: number; withPhone: number } | null>(null);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ sent: number; failed: number; skipped: number; errors?: string[] } | null>(null);
 
   useEffect(() => { api("/api/admin/sms").then(async (r) => r.ok && setInfo(await r.json())); }, []);
 
@@ -690,8 +690,13 @@ function SmsBroadcast({ onFlash }: { onFlash: (s: string) => void }) {
       const r = await api("/api/admin/sms", { method: "POST", body: JSON.stringify({ message: msg.trim() }) });
       const j = await r.json();
       if (!r.ok) { await alertDialog({ title: "SMS failed", body: errText(j) }); return; }
-      setResult(j); setMsg("");
-      onFlash(`SMS sent to ${j.sent} agent${j.sent === 1 ? "" : "s"}${j.failed ? ` · ${j.failed} failed` : ""}`);
+      setResult(j);
+      if (!j.failed) setMsg("");
+      if (j.failed && j.errors?.length) {
+        await alertDialog({ title: `SMS failed (${j.failed})`, body: `The SMS provider rejected the send:\n\n${j.errors[0]}\n\nCheck SMS_PROVIDER + credentials on the server.` });
+      } else {
+        onFlash(`SMS sent to ${j.sent} agent${j.sent === 1 ? "" : "s"}`);
+      }
     } catch (e: any) {
       await alertDialog({ title: "SMS failed", body: String(e?.message || e) });
     } finally { setBusy(false); }
@@ -712,8 +717,11 @@ function SmsBroadcast({ onFlash }: { onFlash: (s: string) => void }) {
         placeholder="e.g. Reminder: report your polling-unit results as soon as counting ends. Thank you." />
       <div className="mt-1 flex items-center justify-between text-[11px] text-muted">
         <span>{msg.length}/480 · {segments} SMS segment{segments === 1 ? "" : "s"} each</span>
-        {result && <span className="text-good">Sent {result.sent}{result.failed ? ` · ${result.failed} failed` : ""}{result.skipped ? ` · ${result.skipped} no phone` : ""}</span>}
+        {result && <span className={result.failed ? "text-bad" : "text-good"}>Sent {result.sent}{result.failed ? ` · ${result.failed} failed` : ""}{result.skipped ? ` · ${result.skipped} dup` : ""}</span>}
       </div>
+      {result?.failed && result.errors?.length ? (
+        <p className="mt-1 rounded-lg border border-bad/40 bg-bad/10 p-2 text-[11px] text-bad">{result.errors[0]}</p>
+      ) : null}
       <button className="btn-primary mt-2 w-full" disabled={busy || !msg.trim() || !(info?.withPhone)} onClick={send}>
         {busy ? "Sending…" : `Send to all agents with a phone (${info?.withPhone ?? 0})`}
       </button>
