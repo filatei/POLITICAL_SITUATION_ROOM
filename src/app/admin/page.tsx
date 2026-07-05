@@ -22,6 +22,31 @@ function errText(j: any): string {
   return "";
 }
 
+// Build a wa.me deep link. Normalises Nigerian numbers (0803… → 234803…);
+// keeps any already-international number. Empty phone → contact picker.
+function waLink(phone: string | null | undefined, text: string): string {
+  let p = (phone || "").replace(/[^\d+]/g, "");
+  if (p.startsWith("+")) p = p.slice(1);
+  else if (p.startsWith("0")) p = "234" + p.slice(1);
+  else if (p && !p.startsWith("234")) p = p.length <= 10 ? "234" + p : p;
+  const base = p ? `https://wa.me/${p}` : "https://wa.me/";
+  return `${base}?text=${encodeURIComponent(text)}`;
+}
+
+function agentWaText(a: { name: string; inviteCode: string; unitLabel: string }, loginUrl: string): string {
+  return [
+    `Hello ${a.name || "there"}, you're an accredited field agent for the Political Situation Room.`,
+    ``,
+    `📍 Unit: ${a.unitLabel}`,
+    `🔑 Access code: ${a.inviteCode}`,
+    ``,
+    `Tap to sign in (your code fills in automatically, then set a private PIN):`,
+    loginUrl,
+    ``,
+    `Keep your code private — anyone with it can report as you.`,
+  ].join("\n");
+}
+
 type Unit = { id: string; name: string; code: string; ward: string; lga: string; label: string; agents: number };
 type Lga = { id: string; name: string };
 type Agent = { id: string; name: string; phone?: string | null; email?: string | null; inviteCode: string; status: string; unitLabel: string; unit?: string | null; lga?: string | null; state?: string | null; lgaId?: string | null; usedAt?: string | null; lastSeenAt?: string | null };
@@ -450,6 +475,7 @@ function Console({ session, isSuper }: { session: Session; isSuper: boolean }) {
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <span className="tabular rounded-md bg-ink/5 px-2 py-1 text-sm font-semibold text-accent">{a.inviteCode} ⧉</span>
                     <div className="flex items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                      <a className="!text-[#25D366] hover:brightness-110" href={waLink(a.phone, agentWaText(a, `${window.location.origin}${tenantBase}/agent/login?code=${a.inviteCode}`))} target="_blank" rel="noreferrer" title={a.phone ? `Send to ${a.phone} on WhatsApp` : "Open WhatsApp to pick a contact"}>WhatsApp</a>
                       <button className="text-muted hover:text-ink" onClick={() => setEdit({ id: a.id, name: a.name, phone: a.phone || "" })}>Assign</button>
                       <button className="text-muted hover:text-ink" onClick={() => reset(a.id)}>Reset code</button>
                       <button className="text-bad hover:brightness-125" onClick={() => delAgent(a)}>Delete</button>
@@ -956,6 +982,13 @@ function AgentDetailModal({ id, onClose, onFlash, onQr, onCopy }: { id: string; 
               <button className="btn-ghost text-xs" onClick={() => onCopy(a.inviteCode)}>Copy code</button>
               <button className="btn-ghost text-xs" onClick={() => onQr(a.inviteCode, `${a.name} · ${a.unitLabel}`)}>Show QR</button>
               <button className="btn-ghost text-xs" onClick={() => onCopy(`${window.location.origin}${tenantBase}/agent/login?code=${a.inviteCode}`)}>Copy login link</button>
+              <a
+                className="btn-ghost text-xs !text-[#25D366]"
+                href={waLink(a.phone, agentWaText(a, `${window.location.origin}${tenantBase}/agent/login?code=${a.inviteCode}`))}
+                target="_blank"
+                rel="noreferrer"
+                title={a.phone ? `Send code to ${a.phone} on WhatsApp` : "Open WhatsApp to pick a contact"}
+              >WhatsApp</a>
               <button className="btn-ghost text-xs" onClick={() => setEdit({ name: a.name, phone: a.phone || "" })}>Assign recipient</button>
             </div>
             {edit && (
