@@ -677,60 +677,77 @@ function TallyOverride({ units, onFlash }: { units: Unit[]; onFlash: (s: string)
 
 // Broadcast an SMS to all agents in this election who have a phone number.
 function SmsBroadcast({ onFlash }: { onFlash: (s: string) => void }) {
-  const [info, setInfo] = useState<{ smsEnabled: boolean; total: number; withPhone: number } | null>(null);
+  const [info, setInfo] = useState<{ smsEnabled: boolean; whatsappEnabled?: boolean; total: number; withPhone: number } | null>(null);
   const [msg, setMsg] = useState("");
+  const [channel, setChannel] = useState<"sms" | "whatsapp">("sms");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ sent: number; failed: number; skipped: number; errors?: string[] } | null>(null);
 
   useEffect(() => { api("/api/admin/sms").then(async (r) => r.ok && setInfo(await r.json())); }, []);
 
+  const isWa = channel === "whatsapp";
   const segments = Math.max(1, Math.ceil(msg.length / 160));
   async function send() {
     if (!msg.trim() || busy) return;
     const ok = await confirmDialog({
-      title: "Send SMS to all agents?",
-      body: `This sends ${segments} SMS segment${segments === 1 ? "" : "s"} to ${info?.withPhone ?? 0} agent${info?.withPhone === 1 ? "" : "s"} with a phone number. Standard SMS charges apply.`,
+      title: `Send ${isWa ? "WhatsApp" : "SMS"} to all agents?`,
+      body: isWa
+        ? `This sends a WhatsApp message to ${info?.withPhone ?? 0} agent${info?.withPhone === 1 ? "" : "s"} with a phone number. WhatsApp conversation charges apply.`
+        : `This sends ${segments} SMS segment${segments === 1 ? "" : "s"} to ${info?.withPhone ?? 0} agent${info?.withPhone === 1 ? "" : "s"} with a phone number. Standard SMS charges apply.`,
     });
     if (!ok) return;
     setBusy(true); setResult(null);
     try {
-      const r = await api("/api/admin/sms", { method: "POST", body: JSON.stringify({ message: msg.trim() }) });
+      const r = await api("/api/admin/sms", { method: "POST", body: JSON.stringify({ message: msg.trim(), channel }) });
       const j = await r.json();
       if (!r.ok) { await alertDialog({ title: "SMS failed", body: errText(j) }); return; }
       setResult(j);
       if (!j.failed) setMsg("");
       if (j.failed && j.errors?.length) {
-        await alertDialog({ title: `SMS failed (${j.failed})`, body: `The SMS provider rejected the send:\n\n${j.errors[0]}\n\nCheck SMS_PROVIDER + credentials on the server.` });
+        await alertDialog({ title: `${isWa ? "WhatsApp" : "SMS"} failed (${j.failed})`, body: `The provider rejected the send:\n\n${j.errors[0]}\n\nCheck the provider credentials on the server.` });
       } else {
-        onFlash(`SMS sent to ${j.sent} agent${j.sent === 1 ? "" : "s"}`);
+        onFlash(`${isWa ? "WhatsApp" : "SMS"} sent to ${j.sent} agent${j.sent === 1 ? "" : "s"}`);
       }
     } catch (e: any) {
-      await alertDialog({ title: "SMS failed", body: String(e?.message || e) });
+      await alertDialog({ title: "Send failed", body: String(e?.message || e) });
     } finally { setBusy(false); }
   }
 
+  const canSend = isWa ? info?.whatsappEnabled : info?.smsEnabled;
   return (
     <section className="card p-5">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Broadcast SMS to agents</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted">Broadcast to agents</h2>
         <span className="pill bg-white/5 text-muted">{info ? `${info.withPhone}/${info.total} have phones` : "…"}</span>
       </div>
-      {info && !info.smsEnabled && (
+      {info?.whatsappEnabled && (
+        <div className="mb-2 flex gap-1 rounded-lg bg-white/[0.04] p-1">
+          {([["sms", "SMS"], ["whatsapp", "WhatsApp"]] as const).map(([c, label]) => (
+            <button key={c} onClick={() => setChannel(c)}
+              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${channel === c ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted hover:text-ink"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {info && !canSend && (
         <p className="mb-2 rounded-lg border border-warn/40 bg-warn/10 p-2 text-xs text-muted">
-          SMS isn&apos;t configured on the server yet. Set <code className="text-ink">SMS_PROVIDER</code> and <code className="text-ink">SMS_API_KEY</code> to enable sending.
+          {isWa
+            ? <>WhatsApp isn&apos;t configured yet. Set <code className="text-ink">WHATSAPP_PHONE_NUMBER_ID</code>, <code className="text-ink">WHATSAPP_ACCESS_TOKEN</code> and <code className="text-ink">WHATSAPP_TEMPLATE_NAME</code>.</>
+            : <>SMS isn&apos;t configured yet. Set <code className="text-ink">SMS_PROVIDER</code> and <code className="text-ink">SMS_API_KEY</code>.</>}
         </p>
       )}
       <textarea className="input min-h-20" value={msg} maxLength={480} onChange={(e) => setMsg(e.target.value)}
         placeholder="e.g. Reminder: report your polling-unit results as soon as counting ends. Thank you." />
       <div className="mt-1 flex items-center justify-between text-[11px] text-muted">
-        <span>{msg.length}/480 · {segments} SMS segment{segments === 1 ? "" : "s"} each</span>
+        <span>{msg.length}/480{isWa ? "" : ` · ${segments} SMS segment${segments === 1 ? "" : "s"} each`}</span>
         {result && <span className={result.failed ? "text-bad" : "text-good"}>Sent {result.sent}{result.failed ? ` · ${result.failed} failed` : ""}{result.skipped ? ` · ${result.skipped} dup` : ""}</span>}
       </div>
       {result?.failed && result.errors?.length ? (
         <p className="mt-1 rounded-lg border border-bad/40 bg-bad/10 p-2 text-[11px] text-bad">{result.errors[0]}</p>
       ) : null}
-      <button className="btn-primary mt-2 w-full" disabled={busy || !msg.trim() || !(info?.withPhone)} onClick={send}>
-        {busy ? "Sending…" : `Send to all agents with a phone (${info?.withPhone ?? 0})`}
+      <button className="btn-primary mt-2 w-full" disabled={busy || !msg.trim() || !(info?.withPhone) || !canSend} onClick={send}>
+        {busy ? "Sending…" : `Send ${isWa ? "WhatsApp" : "SMS"} to all agents with a phone (${info?.withPhone ?? 0})`}
       </button>
     </section>
   );
