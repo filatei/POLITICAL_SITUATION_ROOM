@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getSession, requireRole } from "@/lib/auth";
 import { inviteCode } from "@/lib/code";
 import { seatStatus } from "@/lib/seats";
+import { sendAgentInvite } from "@/lib/agent-invite";
 
 export const runtime = "nodejs";
 
@@ -63,7 +64,22 @@ export async function POST(req: NextRequest) {
     data: { electionId: election.id, name, phone: phone || null, email: cleanEmail, scope: "PU", pollingUnitId, inviteCode: code, status: "INVITED" },
   });
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "agent:create", entity: "Agent", entityId: agent.id, meta: { unit: pu.name } } });
-  return NextResponse.json({ ok: true, agent: { id: agent.id, name: agent.name, inviteCode: agent.inviteCode, unitLabel: `${pu.name} · ${pu.ward.name} · ${pu.lga.name}` } });
+
+  const unitLabel = `${pu.name} · ${pu.ward.name} · ${pu.lga.name}`;
+  // Email the new agent their code + sign-in link (non-blocking; no-op without email).
+  let emailed = false;
+  if (cleanEmail) {
+    const origin = (process.env.APP_URL || new URL(req.url).origin).replace(/\/+$/, "");
+    const tenant = await db.tenant.findUnique({ where: { electionId: election.id }, select: { slug: true } });
+    if (tenant) {
+      const r = await sendAgentInvite({
+        name, email: cleanEmail, code, unitLabel,
+        electionName: election.name, slug: tenant.slug, origin,
+      });
+      emailed = r.ok;
+    }
+  }
+  return NextResponse.json({ ok: true, emailed, agent: { id: agent.id, name: agent.name, inviteCode: agent.inviteCode, unitLabel } });
 }
 
 // Record who a code is being sent to (recipient name / phone / Google email).

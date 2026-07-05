@@ -354,12 +354,9 @@ export default function Dashboard({ session }: { session: Session }) {
                     return nz.length ? (
                       <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                         {nz.map((s, i) => (
-                          <span key={i} className="flex items-center gap-2 rounded-lg border border-line bg-white/[0.03] px-2 py-1.5">
-                            <PartyBadge code={s.party} color={s.color} size={22} />
-                            <span className="min-w-0 leading-tight">
-                              <span className="block text-xs font-bold">{s.party}</span>
-                              <span className="tabular block text-sm font-extrabold">{nf.format(s.votes)}</span>
-                            </span>
+                          <span key={i} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-white/[0.03] px-2.5 py-1.5" style={{ borderLeft: `3px solid ${s.color}` }}>
+                            <span className="text-xs font-bold">{s.party}</span>
+                            <span className="tabular text-sm font-extrabold">{nf.format(s.votes)}</span>
                           </span>
                         ))}
                       </div>
