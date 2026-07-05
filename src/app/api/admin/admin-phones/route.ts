@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const { phone } = await req.json().catch(() => ({}));
   const n = normalizeMsisdn(String(phone || ""));
   if (!n) return NextResponse.json({ error: "Enter a valid phone number." }, { status: 400 });
-  const set = new Set([...(t.adminPhones || []).map((p) => normalizeMsisdn(p) || p), n]);
+  const set = new Set([...(t.adminPhones || []).map((p: string) => normalizeMsisdn(p) || p), n]);
   const adminPhones = [...set].filter(Boolean) as string[];
   await db.tenant.update({ where: { id: t.id }, data: { adminPhones } });
   await db.auditLog.create({ data: { actorType: s!.kind, actorId: s!.sub, action: "admin:phone-add", entity: "Tenant", entityId: t.id, meta: { phone: n } } }).catch(() => {});
@@ -44,7 +44,7 @@ export async function DELETE(req: NextRequest) {
   if (!t) return NextResponse.json({ error: "No tenant." }, { status: 404 });
   const { phone } = await req.json().catch(() => ({}));
   const n = normalizeMsisdn(String(phone || ""));
-  const adminPhones = (t.adminPhones || []).filter((p) => normalizeMsisdn(p) !== n);
+  const adminPhones = (t.adminPhones || []).filter((p: string) => normalizeMsisdn(p) !== n);
   await db.tenant.update({ where: { id: t.id }, data: { adminPhones } });
   return NextResponse.json({ ok: true, adminPhones });
 }
