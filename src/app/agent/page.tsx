@@ -168,8 +168,8 @@ export default function AgentHome() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-wide text-muted">{election?.name || "Loading…"}</div>
-            <div className="truncate text-lg font-bold">{unit?.name || "—"}</div>
-            <div className="truncate text-xs text-muted">{unit?.label}</div>
+            <div className="truncate text-lg font-bold">{session?.name || "Agent"}</div>
+            <div className="truncate text-xs text-muted">{unit?.label || unit?.name || "—"}</div>
           </div>
           <div className="relative">
             <button onClick={() => setMenu((m) => !m)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent ring-1 ring-inset ring-accent/40" aria-label="Account">
