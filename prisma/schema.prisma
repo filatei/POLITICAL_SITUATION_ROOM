@@ -433,6 +433,7 @@ model Tenant {
   contactEmail String?
   contactPhone String?
   adminEmails  String[] @default([])
+  adminPhones  String[] @default([]) // extra phone numbers allowed to admin-login
   createdAt    DateTime @default(now())
 }
 

@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
   if (!issued) return generic;
 
   const message = `${issued.code} is your PSR admin login code. Valid 5 minutes. Do not share it.`;
-  let delivered = false;
-  if (whatsappOtpEnabled) delivered = await sendWhatsAppOtp(issued.phone, issued.code);
-  if (!delivered && smsEnabled) { try { await sendSms(issued.phone, message); delivered = true; } catch { /* ignore */ } }
+  // Deliver on BOTH channels so the admin gets it wherever they look.
+  if (whatsappOtpEnabled) { try { await sendWhatsAppOtp(issued.phone, issued.code); } catch { /* ignore */ } }
+  if (smsEnabled) { try { await sendSms(issued.phone, message); } catch { /* ignore */ } }
 
   return generic;
 }
