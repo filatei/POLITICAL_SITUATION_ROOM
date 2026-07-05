@@ -402,7 +402,16 @@ function ScoresForm({ cands, unit, onSend, notify }: { cands: Cand[]; unit: Unit
       </div>
       <div>
         <label className="label">Result sheet photo</label>
-        <input key={fileKey} className="input" type="file" accept="image/*" capture="environment" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
+        <div className="grid grid-cols-2 gap-2">
+          <label className="btn-ghost flex cursor-pointer items-center justify-center gap-1 text-sm">
+            📷 Take photo
+            <input key={`cam-${fileKey}`} className="hidden" type="file" accept="image/*" capture="environment" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
+          </label>
+          <label className="btn-ghost flex cursor-pointer items-center justify-center gap-1 text-sm">
+            📎 Attach file
+            <input key={`file-${fileKey}`} className="hidden" type="file" accept="image/*" onChange={(e) => setSheet(e.target.files?.[0] || null)} />
+          </label>
+        </div>
         {sheet && <p className="mt-1 truncate text-xs text-muted">📎 {sheet.name}</p>}
       </div>
       <button className="btn-primary w-full" disabled={totalVotes <= 0} onClick={send}>Submit scores</button>
@@ -457,7 +466,16 @@ function IncidentForm({ onSend, notify }: { onSend: (b: any, f?: any[]) => Promi
       </div>
       <div>
         <label className="label">Photo or video (optional)</label>
-        <input key={fileKey} className="input" type="file" accept="image/*,video/*" capture="environment" onChange={(e) => pick(e.target.files?.[0] || null)} />
+        <div className="grid grid-cols-2 gap-2">
+          <label className="btn-ghost flex cursor-pointer items-center justify-center gap-1 text-sm">
+            📷 Take photo
+            <input key={`cam-${fileKey}`} className="hidden" type="file" accept="image/*,video/*" capture="environment" onChange={(e) => pick(e.target.files?.[0] || null)} />
+          </label>
+          <label className="btn-ghost flex cursor-pointer items-center justify-center gap-1 text-sm">
+            📎 Attach file
+            <input key={`file-${fileKey}`} className="hidden" type="file" accept="image/*,video/*" onChange={(e) => pick(e.target.files?.[0] || null)} />
+          </label>
+        </div>
         {file && (
           <div className="mt-2 flex items-center gap-3 rounded-lg border border-line bg-white/[0.03] p-2">
             {preview
