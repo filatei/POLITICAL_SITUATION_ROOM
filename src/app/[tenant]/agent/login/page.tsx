@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import AgentLoginClient from "@/app/agent/login/AgentLoginClient";
 import TenantScope from "@/components/TenantScope";
+import TenantMissing from "@/components/TenantMissing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +38,6 @@ export async function generateMetadata({ searchParams }: { searchParams: { code?
 export default async function TenantAgentLogin({ params }: { params: { tenant: string } }) {
   const slug = params.tenant.toLowerCase();
   const tenant = await db.tenant.findUnique({ where: { slug } });
-  if (!tenant) notFound();
+  if (!tenant) return <TenantMissing slug={slug} kind="agent" />;
   return <TenantScope slug={slug}><AgentLoginClient /></TenantScope>;
 }
