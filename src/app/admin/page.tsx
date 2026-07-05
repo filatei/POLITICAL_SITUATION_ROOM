@@ -69,19 +69,31 @@ export default function AdminPage() {
 
   if (state === "loading") return <main className="grid min-h-dvh place-items-center text-muted">Loading…</main>;
   if (state === "out") return <RoomLogin onDone={check} />;
-  if (state === "denied")
+  if (state === "denied") {
+    const isAgent = session?.role === "AGENT";
+    const slug = typeof window !== "undefined" ? tenantFromPath(window.location.pathname).slug : "";
     return (
-      <main className="grid min-h-dvh place-items-center p-6 text-center">
-        <div>
-          <div className="text-lg font-semibold">Admins only</div>
-          <p className="mt-1 text-sm text-muted">Signed in as {session?.name} ({session?.role}). You need an ADMIN or COORDINATOR account.</p>
-          <div className="mt-5 flex items-center justify-center gap-3">
-            <button className="btn-primary" onClick={async () => { await logout(); setSession(null); setState("out"); }}>Sign out & switch account</button>
-            <a href="/room" className="btn-ghost">Dashboard</a>
+      <main className="grid min-h-dvh place-items-center p-6">
+        <div className="card w-full max-w-md p-8 text-center">
+          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-accent/10 text-2xl">🔐</div>
+          <h1 className="text-lg font-bold">{isAgent ? "This is the admin console" : "You don't have access to this console"}</h1>
+          <p className="mt-2 text-sm text-muted">
+            {isAgent
+              ? <>You&apos;re signed in as a field agent{session?.name ? <> (<strong className="text-ink">{session.name}</strong>)</> : ""}. Agents report from their own page — the admin console is for election organisers.</>
+              : <>You&apos;re signed in as <strong className="text-ink">{session?.name}</strong>{session?.role ? <> ({session.role})</> : ""}, which isn&apos;t an organiser of this election. Only its <strong className="text-ink">admin</strong> or <strong className="text-ink">coordinator</strong> can open this console.</>}
+          </p>
+          <div className="mt-6 flex flex-col gap-2">
+            {isAgent && slug && <a href={`/${slug}/agent`} className="btn-primary">Go to my agent page →</a>}
+            <button className="btn-primary" onClick={async () => { await logout(); setSession(null); setState("out"); }}>
+              Sign in with the organiser account
+            </button>
+            <a href="/" className="btn-ghost">Back to home</a>
           </div>
+          <p className="mt-5 text-xs text-muted">Think this is a mistake? Ask the election&apos;s admin to add your email as a coordinator.</p>
         </div>
       </main>
     );
+  }
   // The bare /admin root is reserved for super-admins. A tenant admin who lands
   // here is redirected to their own room (or picks, if they own several).
   const bareRoot = typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/admin";
