@@ -193,6 +193,11 @@ export default function Dashboard({ session }: { session: Session }) {
       })
       .sort((a, b) => b.lastAt - a.lastAt);
   }, [feed]);
+  // Live = still needs a decision (pending); Archive = already accepted/disputed.
+  // Splitting keeps the working pane focused on what's outstanding.
+  const isArchived = (st?: string) => st === "VERIFIED" || st === "DISPUTED";
+  const liveGroups = useMemo(() => scoreGroups.filter((g) => !isArchived(g.latest.scoreStatus)), [scoreGroups]);
+  const archivedGroups = useMemo(() => scoreGroups.filter((g) => isArchived(g.latest.scoreStatus)), [scoreGroups]);
   // Everything that isn't a score: incidents + casual updates/status, newest first.
   const activity = useMemo(() => feed.filter((x) => x.type !== "SCORE"), [feed]);
   const maxVote = useMemo(() => Math.max(1, ...(tally?.leaderboard.flatMap((l) => [l.verified, l.declared]) || [1])), [tally]);
@@ -209,6 +214,7 @@ export default function Dashboard({ session }: { session: Session }) {
 
   const [menu, setMenu] = useState(false);
   const [mtab, setMtab] = useState<"tally" | "scores" | "activity">("scores");
+  const [scoreTab, setScoreTab] = useState<"live" | "archive">("live");
   const [themeName, setThemeName] = useState<Theme>("dark");
   useEffect(() => { setThemeName(getTheme()); }, []);
   function toggleTheme() { const n: Theme = themeName === "light" ? "dark" : "light"; setTheme(n); setThemeName(n); }
@@ -321,9 +327,17 @@ export default function Dashboard({ session }: { session: Session }) {
         <section className={`card flex-col p-4 ${mtab === "scores" ? "flex" : "hidden"} lg:flex`}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Scores by unit</h2>
-            <span className="pill bg-white/5 text-muted">{scoreGroups.length} unit{scoreGroups.length === 1 ? "" : "s"}</span>
+            <span className="pill bg-white/5 text-muted">{(scoreTab === "live" ? liveGroups : archivedGroups).length} unit{(scoreTab === "live" ? liveGroups : archivedGroups).length === 1 ? "" : "s"}</span>
           </div>
-          {splash && (
+          <div className="mb-3 flex gap-1 rounded-lg bg-white/[0.04] p-1">
+            {([["live", "Pending"], ["archive", "Archive"]] as const).map(([t, label]) => (
+              <button key={t} onClick={() => setScoreTab(t)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${scoreTab === t ? "bg-accent/15 text-ink ring-1 ring-inset ring-accent/40" : "text-muted hover:text-ink"}`}>
+                {label} <span className="opacity-60">{t === "live" ? liveGroups.length : archivedGroups.length}</span>
+              </button>
+            ))}
+          </div>
+          {scoreTab === "live" && splash && (
             <div key={splash.unit + splash.votes} className="splash-in mb-3 flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: splash.color, boxShadow: `0 0 22px ${splash.color}55` }}>
               <PartyBadge code={splash.lead} color={splash.color} size={36} />
               <div className="min-w-0">
@@ -337,7 +351,7 @@ export default function Dashboard({ session }: { session: Session }) {
             </div>
           )}
           <div className="max-h-[74vh] space-y-2 overflow-y-auto pr-1">
-            {scoreGroups.map((g) => {
+            {(scoreTab === "live" ? liveGroups : archivedGroups).map((g) => {
               const it = g.latest;
               return (
                 <article key={g.unit} className="rounded-lg border border-line p-3">
@@ -380,7 +394,8 @@ export default function Dashboard({ session }: { session: Session }) {
                 </article>
               );
             })}
-            {!scoreGroups.length && <p className="text-sm text-muted">No scores yet.</p>}
+            {scoreTab === "live" && !liveGroups.length && <p className="text-sm text-muted">{scoreGroups.length ? "No pending scores — all reviewed. Check the Archive tab." : "No scores yet."}</p>}
+            {scoreTab === "archive" && !archivedGroups.length && <p className="text-sm text-muted">No accepted or disputed scores yet.</p>}
           </div>
         </section>
 
