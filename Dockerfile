@@ -12,6 +12,9 @@ RUN npx prisma generate
 # Defaults to the Otuburu/Torama Google client; override with --build-arg.
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=763064592541-afo8b3po66bmo04q9ecselk9prske4l0.apps.googleusercontent.com
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+# Route admin phone login through the central Torama Auth service when "1".
+ARG NEXT_PUBLIC_TORAMA_AUTH=
+ENV NEXT_PUBLIC_TORAMA_AUTH=$NEXT_PUBLIC_TORAMA_AUTH
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

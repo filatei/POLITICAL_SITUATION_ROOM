@@ -26,6 +26,8 @@ services:
       context: .
       args:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-763064592541-afo8b3po66bmo04q9ecselk9prske4l0.apps.googleusercontent.com}
+        # Set to "1" (in the server .env) to route admin phone login via Torama Auth.
+        NEXT_PUBLIC_TORAMA_AUTH: ${NEXT_PUBLIC_TORAMA_AUTH:-}
     image: psr-app:latest
     container_name: psr-app
     restart: unless-stopped
@@ -33,6 +35,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3200"
+      # Torama Auth base (used by /api/auth/torama/* server routes).
+      AUTH_URL: ${AUTH_URL:-https://auth.torama.money}
+      AUTH_APP_ID: ${AUTH_APP_ID:-psr}
     ports:
       - "127.0.0.1:3200:3200"
     volumes:
