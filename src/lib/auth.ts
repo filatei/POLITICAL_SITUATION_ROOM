@@ -24,7 +24,7 @@ const secret = () => {
   return new TextEncoder().encode(val);
 };
 
-export async function signSession(s: Session, expires = "30d"): Promise<string> {
+export async function signSession(s: Session, expires = "90d"): Promise<string> {
   return new SignJWT({ ...s })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
