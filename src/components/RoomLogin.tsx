@@ -64,6 +64,21 @@ export default function RoomLogin({ onDone }: { onDone: () => void }) {
   );
 }
 
+// When set, admin phone login routes through the central Torama Auth service
+// (via PSR's own /api/auth/torama/* proxy) instead of PSR's built-in OTP.
+const USE_TORAMA_AUTH = process.env.NEXT_PUBLIC_TORAMA_AUTH === "1";
+
+function psrDeviceId(): string {
+  try {
+    let id = localStorage.getItem("psr_device_id");
+    if (!id) {
+      id = (crypto.randomUUID && crypto.randomUUID()) || `dev-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem("psr_device_id", id);
+    }
+    return id;
+  } catch { return `dev-${Date.now().toString(36)}`; }
+}
+
 // Phone → WhatsApp code → verify → session. For tenant admins & super-admins.
 function WhatsAppLogin({ onDone, onError }: { onDone: () => void; onError: (s: string) => void }) {
   const [step, setStep] = useState<"phone" | "code">("phone");
@@ -76,8 +91,10 @@ function WhatsAppLogin({ onDone, onError }: { onDone: () => void; onError: (s: s
     if (!phone.trim() || busy) return;
     setBusy(true); onError("");
     try {
-      await fetch("/api/auth/login-otp/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: phone.trim() }) });
-      setStep("code"); setNote("If that number is an admin, a code is on its way via WhatsApp.");
+      const url = USE_TORAMA_AUTH ? "/api/auth/torama/start" : "/api/auth/login-otp/request";
+      const body = USE_TORAMA_AUTH ? { phone: phone.trim(), deviceId: psrDeviceId() } : { phone: phone.trim() };
+      await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      setStep("code"); setNote("If that number is an admin, a code is on its way via WhatsApp & SMS.");
     } catch { onError("Couldn't request a code. Try again."); }
     finally { setBusy(false); }
   }
@@ -85,7 +102,11 @@ function WhatsAppLogin({ onDone, onError }: { onDone: () => void; onError: (s: s
     if (code.trim().length < 4 || busy) return;
     setBusy(true); onError("");
     try {
-      const r = await fetch("/api/auth/login-otp/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: phone.trim(), code: code.trim() }) });
+      const url = USE_TORAMA_AUTH ? "/api/auth/torama/verify" : "/api/auth/login-otp/verify";
+      const body = USE_TORAMA_AUTH
+        ? { phone: phone.trim(), code: code.trim(), deviceId: psrDeviceId() }
+        : { phone: phone.trim(), code: code.trim() };
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (r.ok) { saveAuth(j.token, j.session); onDone(); }
       else onError(j.error || "Invalid or expired code.");

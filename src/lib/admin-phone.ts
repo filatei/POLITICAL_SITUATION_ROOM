@@ -39,3 +39,26 @@ export async function resolveAdminByPhone(phone: string): Promise<AdminMatch | n
   }
   return null;
 }
+
+// Resolve an email to an admin identity — the email equivalent of the phone
+// resolver, used by the Torama Auth exchange (Google / email-based login).
+export async function resolveAdminByEmail(email: string): Promise<AdminMatch | null> {
+  const e = (email || "").trim().toLowerCase();
+  if (!e) return null;
+
+  if (SUPER_ADMINS.map((s) => s.toLowerCase()).includes(e)) {
+    return { email: e, name: e, electionId: null, isSuper: true };
+  }
+
+  const tenants = await db.tenant.findMany({
+    where: { contactEmail: { not: null } },
+    select: { contactEmail: true, adminEmails: true, name: true, electionId: true },
+  });
+  for (const t of tenants) {
+    const emails = [t.contactEmail, ...(t.adminEmails || [])].map((x) => (x || "").toLowerCase());
+    if (emails.includes(e)) {
+      return { email: e, name: t.name, electionId: t.electionId, isSuper: false };
+    }
+  }
+  return null;
+}
