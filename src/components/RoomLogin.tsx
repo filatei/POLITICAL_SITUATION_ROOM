@@ -94,18 +94,19 @@ function WhatsAppLogin({ onDone, onError }: { onDone: () => void; onError: (s: s
       const url = USE_TORAMA_AUTH ? "/api/auth/torama/start" : "/api/auth/login-otp/request";
       const body = USE_TORAMA_AUTH ? { phone: phone.trim(), deviceId: psrDeviceId() } : { phone: phone.trim() };
       await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      setStep("code"); setNote("If that number is an admin, a code is on its way via WhatsApp & SMS.");
+      setStep("code"); setNote("If that number is an admin, a code is on its way by SMS.");
     } catch { onError("Couldn't request a code. Try again."); }
     finally { setBusy(false); }
   }
-  async function verify() {
-    if (code.trim().length < 4 || busy) return;
+  async function verify(codeVal?: string) {
+    const c = (codeVal ?? code).trim();
+    if (c.length < 4 || busy) return;
     setBusy(true); onError("");
     try {
       const url = USE_TORAMA_AUTH ? "/api/auth/torama/verify" : "/api/auth/login-otp/verify";
       const body = USE_TORAMA_AUTH
-        ? { phone: phone.trim(), code: code.trim(), deviceId: psrDeviceId() }
-        : { phone: phone.trim(), code: code.trim() };
+        ? { phone: phone.trim(), code: c, deviceId: psrDeviceId() }
+        : { phone: phone.trim(), code: c };
       const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json();
       if (r.ok) { saveAuth(j.token, j.session); onDone(); }
@@ -121,15 +122,19 @@ function WhatsAppLogin({ onDone, onError }: { onDone: () => void; onError: (s: s
           <span className="flex shrink-0 items-center gap-1 border-r border-line bg-ink/5 px-3 text-sm text-muted">🇳🇬 +234</span>
           <input className="input flex-1 border-0 bg-transparent focus:ring-0" value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" inputMode="tel" autoComplete="tel" placeholder="803 000 0000" onKeyDown={(e) => e.key === "Enter" && request()} />
         </div>
-        <button className="btn-ghost w-full" disabled={busy || !phone.trim()} onClick={request}>{busy ? "Sending…" : "Send WhatsApp code"}</button>
+        <button className="btn-ghost w-full" disabled={busy || !phone.trim()} onClick={request}>{busy ? "Sending…" : "Send code"}</button>
       </div>
     );
   }
   return (
     <div className="w-full space-y-2">
       {note && <p className="text-center text-[11px] text-good">{note}</p>}
-      <input className="input w-full text-center tracking-[0.4em]" value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]*" placeholder="••••••" onKeyDown={(e) => e.key === "Enter" && verify()} />
-      <button className="btn-primary w-full" disabled={busy || code.trim().length < 4} onClick={verify}>{busy ? "Verifying…" : "Sign in"}</button>
+      <input
+        className="input w-full text-center tracking-[0.4em]" value={code}
+        onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 6); setCode(v); if (v.length === 6) verify(v); }}
+        inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" placeholder="••••••" autoFocus
+        onKeyDown={(e) => e.key === "Enter" && verify()} />
+      <button className="btn-primary w-full" disabled={busy || code.trim().length < 4} onClick={() => verify()}>{busy ? "Verifying…" : "Sign in"}</button>
       <button className="w-full text-center text-[11px] text-muted underline" onClick={() => { setStep("phone"); setCode(""); setNote(""); }}>Use a different number</button>
     </div>
   );

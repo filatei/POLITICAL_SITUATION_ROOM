@@ -219,6 +219,23 @@ export default function Dashboard({ session }: { session: Session }) {
   );
 
   const [menu, setMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Close the account menu on any click/tap outside it, or on Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
   const [mtab, setMtab] = useState<"tally" | "scores" | "activity">("scores");
   const [scoreTab, setScoreTab] = useState<"live" | "archive">("live");
   const [themeName, setThemeName] = useState<Theme>("dark");
@@ -235,12 +252,11 @@ export default function Dashboard({ session }: { session: Session }) {
           {brand.logoUrl
             ? <img src={brand.logoUrl} alt={brand.name} className="h-7 w-auto max-w-[130px] shrink-0 object-contain" />
             : <span className="live-dot text-bad"><span className="block h-2.5 w-2.5 rounded-full bg-bad" /></span>}
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button onClick={() => setMenu((m) => !m)} aria-label="Account menu"
               className="grid h-9 w-9 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent ring-1 ring-inset ring-accent/40">{initials}</button>
             {menu && (
               <>
-                <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
                 <div className="sheet-in absolute right-0 z-30 mt-2 w-60 origin-top-right rounded-xl border border-line bg-surface p-1.5 shadow-2xl">
                   <div className="px-3 py-2">
                     <div className="truncate text-sm font-semibold">{session.name}</div>

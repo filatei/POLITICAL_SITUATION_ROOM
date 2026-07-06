@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
   const pinned = match.isSuper ? null : match.electionId;
   const user = await db.user.upsert({
     where: { email: match.email },
-    update: { ...(pinned ? { electionId: pinned } : {}) },
+    // Super-admins are global — clear any stale election pin. Tenant admins pin
+    // to their election.
+    update: match.isSuper ? { electionId: null } : (pinned ? { electionId: pinned } : {}),
     create: { email: match.email, name: match.name || match.email, role: "ADMIN", electionId: pinned },
   });
   const session: Session = {
